@@ -2,12 +2,16 @@
   "name": "korum",
   "private": true,
   "version": "1.0.0",
-  "description": "Korum is a mobile-first sports match readiness platform.",
+  "description": "Korum — mobile-first sports match readiness platform.",
   "scripts": {
     "postinstall": "npm --prefix apps/web install",
     "dev": "npm --prefix apps/web run dev",
     "build": "npm --prefix apps/web run build",
+    "start": "npm --prefix apps/web run start",
     "lint": "npm --prefix apps/web run lint",
     "typecheck": "npm --prefix apps/web run typecheck"
+  },
+  "dependencies": {
+    "next": "14.2.35"
   }
 }

@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import type { Viewport } from "next";
 import Link from "next/link";
 
 import "@/styles/globals.css";
@@ -6,7 +7,12 @@ import "@/styles/globals.css";
 export const metadata = {
   title: "Korum",
   description: "Mobile-first sports match readiness platform",
-  viewport: "width=device-width, initial-scale=1, viewport-fit=cover",
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
   themeColor: "#1a7a4d",
 };
 
@@ -14,13 +20,11 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
       <head>
-        <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-        <meta name="theme-color" content="#1a7a4d" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
       </head>
       <body>
-        {/* ── Desktop / sticky top header ── */}
+        {/* ── Desktop sticky header ── */}
         <header className="app-header">
           <div className="app-header__inner">
             <Link href="/" className="app-logo">
@@ -28,7 +32,6 @@ export default function RootLayout({ children }: { children: ReactNode }) {
               Korum
             </Link>
 
-            {/* Desktop nav — hidden on mobile via CSS */}
             <nav className="nav-links" aria-label="Main navigation">
               <Link href="/dashboard" className="nav-link">Dashboard</Link>
               <Link href="/create/match" className="nav-link">Create Match</Link>
@@ -40,7 +43,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
 
         {children}
 
-        {/* ── Mobile bottom tab bar — shown only on mobile via CSS ── */}
+        {/* ── Mobile bottom tab bar ── */}
         <nav className="bottom-nav" aria-label="Mobile navigation">
           <div className="bottom-nav__inner">
             <Link href="/dashboard" className="bottom-nav__item">
@@ -61,7 +64,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
               Join
             </Link>
 
-            <Link href="/create/match" className="bottom-nav__item" style={{ position: "relative" }}>
+            <Link href="/create/match" className="bottom-nav__item">
               <span style={{
                 display: "grid",
                 placeItems: "center",
