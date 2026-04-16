@@ -82,6 +82,7 @@ export default function CreatePollPage() {
                 Match ID
                 <input
                   className="input"
+                  placeholder="Paste your Match ID from the Dashboard"
                   value={matchId}
                   onChange={(event) => setMatchId(event.target.value)}
                 />

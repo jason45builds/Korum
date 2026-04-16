@@ -18,6 +18,7 @@ const toLocalDateTime = (date: Date) => date.toISOString().slice(0, 16);
 export default function CreateMatchPage() {
   const router = useRouter();
   const { isAuthenticated, loading } = useAuth();
+  const [authTimedOut, setAuthTimedOut] = useState(false);
   const [teams, setTeams] = useState<TeamDetails[]>([]);
   const [createTeamMsg, setCreateTeamMsg] = useState<{ text: string; error: boolean } | null>(null);
   const [matchMsg, setMatchMsg] = useState<{ text: string; error: boolean } | null>(null);
@@ -48,6 +49,12 @@ export default function CreateMatchPage() {
   };
 
   useEffect(() => {
+    if (!loading) return;
+    const t = setTimeout(() => setAuthTimedOut(true), 5000);
+    return () => clearTimeout(t);
+  }, [loading]);
+
+  useEffect(() => {
     if (isAuthenticated) {
       void loadTeams().catch(() =>
         setMatchMsg({ text: "Could not load your teams.", error: true }),
@@ -55,7 +62,9 @@ export default function CreateMatchPage() {
     }
   }, [isAuthenticated]);
 
-  if (!loading && !isAuthenticated) {
+  if (loading && !authTimedOut) return <main><Loader label="Loading…" /></main>;
+
+  if (!isAuthenticated) {
     return (
       <main>
         <div className="page-shell">
@@ -67,8 +76,6 @@ export default function CreateMatchPage() {
       </main>
     );
   }
-
-  if (loading) return <main><Loader label="Loading…" /></main>;
 
   const field = (key: keyof typeof form) => ({
     value: String(form[key]),

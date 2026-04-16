@@ -19,7 +19,18 @@ export const useAuth = () => {
   };
 
   useEffect(() => {
-    const client = getSupabaseBrowserClient();
+    let client: ReturnType<typeof getSupabaseBrowserClient>;
+    try {
+      client = getSupabaseBrowserClient();
+    } catch (err) {
+      console.error(
+        "[Korum] Supabase client failed to initialize. " +
+        "Ensure NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY are set.",
+        err,
+      );
+      setLoading(false);
+      return;
+    }
 
     const initialize = async () => {
       setLoading(true);

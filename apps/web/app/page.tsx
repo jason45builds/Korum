@@ -67,7 +67,7 @@ export default function HomePage() {
         </section>
 
         {/* ── Feature cards ── */}
-        <div className="grid grid-3">
+        <div className="grid grid-3" style={{ marginBottom: "2rem" }}>
           {[
             {
               icon: "🏴",

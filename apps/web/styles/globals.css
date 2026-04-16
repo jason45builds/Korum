@@ -453,6 +453,14 @@ main {
   animation: fadeInUp 300ms ease both;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .animate-in {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+}
+
 /* ─── Toast / message strip ──────────────────────────────────────────── */
 .message-strip {
   padding: 0.75rem 1rem;

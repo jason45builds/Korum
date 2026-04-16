@@ -77,9 +77,10 @@ export function AuthPanel({
       <div className="form-grid">
         {step === "request" ? (
           <>
-            <label className="label">
+            <label className="label" htmlFor="auth-phone">
               Phone number
               <input
+                id="auth-phone"
                 className="input"
                 type="tel"
                 inputMode="tel"
@@ -90,9 +91,10 @@ export function AuthPanel({
                 onKeyDown={(e) => { if (e.key === "Enter") void requestOtp(); }}
               />
             </label>
-            <label className="label">
+            <label className="label" htmlFor="auth-name">
               Your name <span style={{ color: "var(--text-faint)", fontWeight: 400 }}>(optional)</span>
               <input
+                id="auth-name"
                 className="input"
                 type="text"
                 placeholder="Arjun Sharma"
@@ -108,9 +110,10 @@ export function AuthPanel({
           </>
         ) : (
           <>
-            <label className="label">
+            <label className="label" htmlFor="auth-otp">
               6-digit code
               <input
+                id="auth-otp"
                 className="input"
                 ref={otpRef}
                 type="text"

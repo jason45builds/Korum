@@ -95,7 +95,10 @@ export default function DashboardPage() {
   return (
     <main>
       <div className="page-shell">
-        <DashboardHeader profile={profile} onSignOut={() => void signOut()} />
+        <DashboardHeader
+          profile={profile}
+          onSignOut={isAuthenticated ? () => void signOut() : undefined}
+        />
 
         {/* ── Team actions: stacked on mobile, side by side on desktop ── */}
         <div className="grid grid-2">

@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 
 import { Button } from "@/components/ui/Button";
@@ -12,8 +13,12 @@ export function DashboardHeader({
   profile?: UserProfile | null;
   onSignOut?: () => void;
 }) {
-  const hour = new Date().getHours();
-  const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+  const [greeting, setGreeting] = useState("Good morning");
+
+  useEffect(() => {
+    const hour = new Date().getHours();
+    setGreeting(hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening");
+  }, []);
 
   return (
     <section className="hero-panel animate-in" style={{ display: "grid", gap: "1.25rem" }}>

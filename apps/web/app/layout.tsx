@@ -6,7 +6,25 @@ import "@/styles/globals.css";
 
 export const metadata = {
   title: "Korum",
-  description: "Mobile-first sports match readiness platform",
+  description: "Mobile-first sports match readiness platform. Collect RSVPs, confirm payments, and lock your squad before kickoff.",
+  icons: {
+    icon: "/favicon.svg",
+    shortcut: "/favicon.svg",
+    apple: "/favicon.svg",
+  },
+  openGraph: {
+    title: "Korum — Match Readiness Platform",
+    description: "Captains: collect RSVPs, confirm paid slots, and lock your squad before game time.",
+    url: "https://korum.app",
+    siteName: "Korum",
+    locale: "en_IN",
+    type: "website",
+  },
+  twitter: {
+    card: "summary",
+    title: "Korum — Match Readiness Platform",
+    description: "Captains: collect RSVPs, confirm paid slots, and lock your squad before game time.",
+  },
 };
 
 export const viewport: Viewport = {
