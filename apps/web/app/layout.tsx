@@ -6,25 +6,7 @@ import "@/styles/globals.css";
 
 export const metadata = {
   title: "Korum",
-  description: "Mobile-first sports match readiness platform. Collect RSVPs, confirm payments, and lock your squad before kickoff.",
-  icons: {
-    icon: "/favicon.svg",
-    shortcut: "/favicon.svg",
-    apple: "/favicon.svg",
-  },
-  openGraph: {
-    title: "Korum — Match Readiness Platform",
-    description: "Captains: collect RSVPs, confirm paid slots, and lock your squad before game time.",
-    url: "https://korum.app",
-    siteName: "Korum",
-    locale: "en_IN",
-    type: "website",
-  },
-  twitter: {
-    card: "summary",
-    title: "Korum — Match Readiness Platform",
-    description: "Captains: collect RSVPs, confirm paid slots, and lock your squad before game time.",
-  },
+  description: "Mobile-first sports match readiness platform",
 };
 
 export const viewport: Viewport = {
@@ -38,6 +20,14 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
       <head>
+        {/* Preconnect for faster font loading */}
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        {/* Load Syne + DM Sans via link tag — more reliable than CSS @import in Next.js */}
+        <link
+          href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&display=swap"
+          rel="stylesheet"
+        />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
       </head>
@@ -49,7 +39,6 @@ export default function RootLayout({ children }: { children: ReactNode }) {
               <span className="app-logo__icon" aria-hidden="true">K</span>
               Korum
             </Link>
-
             <nav className="nav-links" aria-label="Main navigation">
               <Link href="/dashboard" className="nav-link">Dashboard</Link>
               <Link href="/create/match" className="nav-link">Create Match</Link>

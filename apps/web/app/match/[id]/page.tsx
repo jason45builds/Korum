@@ -19,9 +19,10 @@ import { useMatch } from "@/hooks/useMatch";
 export default function MatchPage() {
   const params = useParams<{ id: string }>();
   const { profile, isAuthenticated, loading: authLoading } = useAuth();
-  const { activeMatch, loading } = useMatch(params.id);
+  const { activeMatch, loading: matchLoading } = useMatch(params.id);
 
-  if (loading && !activeMatch) {
+  // Loading match data
+  if (matchLoading && !activeMatch) {
     return <main><Loader label="Loading match…" /></main>;
   }
 
@@ -32,17 +33,26 @@ export default function MatchPage() {
           icon="🔍"
           title="Match not found"
           description="Check the link or join code and try again."
-          action={
-            <Link href="/match/join">
-              <Button>Join via code</Button>
-            </Link>
-          }
+          action={<Link href="/match/join"><Button>Join via code</Button></Link>}
         />
       </main>
     );
   }
 
-  if (!authLoading && !isAuthenticated) {
+  // Auth still loading — show match header while waiting
+  if (authLoading) {
+    return (
+      <main>
+        <div className="page-shell">
+          <MatchHeader match={activeMatch} />
+          <Loader label="Checking your session…" />
+        </div>
+      </main>
+    );
+  }
+
+  // Not signed in
+  if (!isAuthenticated) {
     return (
       <main>
         <div className="page-shell">
@@ -61,31 +71,25 @@ export default function MatchPage() {
       <div className="page-shell">
         <MatchHeader match={activeMatch} />
 
-        {/* Status + Payment summary side by side (stack on mobile) */}
         <div className="grid grid-2">
           <MatchStatus match={activeMatch} />
           <PaymentSummary match={activeMatch} />
         </div>
 
-        {/* My status + Next step side by side */}
         <div className="grid grid-2">
-          <PaymentStatus
-            paymentStatus={me?.paymentStatus}
-            participantStatus={me?.status}
-          />
+          <PaymentStatus paymentStatus={me?.paymentStatus} participantStatus={me?.status} />
 
           <section className="panel animate-in" style={{ display: "grid", gap: "1rem" }}>
             <div>
               <p className="eyebrow">Next Step</p>
               <h3 className="title-md">
-                {isConfirmed ? "You're in!" : me ? "Complete payment" : "Join this match"}
+                {isConfirmed ? "You're in! ✅" : me ? "Complete payment" : "Join this match"}
               </h3>
             </div>
-
             {me ? (
               isConfirmed ? (
                 <p className="muted" style={{ fontSize: "0.9rem" }}>
-                  Your spot is confirmed. Keep an eye on match status updates.
+                  Your spot is confirmed. Keep an eye on match updates.
                 </p>
               ) : (
                 <PaymentButton matchId={activeMatch.id} profile={profile} />
@@ -100,16 +104,8 @@ export default function MatchPage() {
                 </Link>
               </div>
             )}
-
-            <Link
-              href={`/match/room?matchId=${activeMatch.id}`}
-              style={{
-                fontSize: "0.88rem",
-                fontWeight: 600,
-                color: "var(--primary)",
-                fontFamily: "var(--font-display)",
-              }}
-            >
+            <Link href={`/match/room?matchId=${activeMatch.id}`}
+              style={{ fontSize: "0.88rem", fontWeight: 600, color: "var(--primary)", fontFamily: "var(--font-display)" }}>
               Open readiness room →
             </Link>
           </section>

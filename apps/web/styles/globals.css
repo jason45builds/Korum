@@ -1,27 +1,26 @@
 /* ─── Korum Design System ──────────────────────────────────────────── */
-@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&display=swap');
 
 :root {
   color-scheme: light;
 
-  /* Surface */
-  --bg:              #f0f4f2;
+  /* Surface — stronger contrast than before */
+  --bg:              #e8ede9;
   --surface:         #ffffff;
-  --surface-muted:   #e8eeeb;
-  --surface-accent:  #d6ede0;
-  --glass:           rgba(255,255,255,0.72);
-  --glass-border:    rgba(210,228,218,0.7);
+  --surface-muted:   #edf2ee;
+  --surface-accent:  #d4eadb;
+  --glass:           #ffffff;
+  --glass-border:    rgba(180, 210, 190, 0.9);
 
   /* Text */
-  --text:            #111c17;
-  --text-muted:      #526058;
-  --text-faint:      #8fa899;
+  --text:            #0f1a14;
+  --text-muted:      #4a5e52;
+  --text-faint:      #7a9283;
 
   /* Brand */
   --primary:         #1a7a4d;
   --primary-dark:    #125c39;
-  --primary-soft:    #d8f2e4;
-  --primary-glow:    rgba(26,122,77,0.18);
+  --primary-soft:    #c8efd8;
+  --primary-glow:    rgba(26,122,77,0.2);
 
   /* Status */
   --danger:          #c0392b;
@@ -32,10 +31,10 @@
   --success-soft:    #dcfce7;
 
   /* Semantic */
-  --line:            #d4dfd8;
-  --shadow-sm:       0 2px 8px rgba(17,28,23,0.06);
-  --shadow:          0 8px 32px rgba(17,28,23,0.10);
-  --shadow-lg:       0 20px 60px rgba(17,28,23,0.14);
+  --line:            #c8d8cc;
+  --shadow-sm:       0 2px 8px rgba(15,26,20,0.08);
+  --shadow:          0 4px 20px rgba(15,26,20,0.12);
+  --shadow-lg:       0 12px 48px rgba(15,26,20,0.16);
 
   /* Shape */
   --radius-xs:       8px;
@@ -47,7 +46,7 @@
   /* Layout */
   --max-width:       1120px;
   --nav-height:      60px;
-  --bottom-bar:      68px; /* reserved for mobile bottom nav */
+  --bottom-bar:      68px;
 
   /* Type */
   --font-display:    'Syne', sans-serif;
@@ -67,8 +66,8 @@ body {
   margin: 0;
   min-height: 100dvh;
   background:
-    radial-gradient(ellipse 80% 40% at 90% -10%, rgba(26,122,77,0.14), transparent),
-    radial-gradient(ellipse 60% 30% at -10% 70%, rgba(22,163,74,0.08), transparent),
+    radial-gradient(ellipse 70% 50% at 95% 0%, rgba(26,122,77,0.12), transparent),
+    radial-gradient(ellipse 50% 40% at 5% 80%, rgba(22,163,74,0.08), transparent),
     var(--bg);
   color: var(--text);
   font-family: var(--font-body);
@@ -78,7 +77,6 @@ body {
 }
 
 a { color: inherit; text-decoration: none; }
-
 button, input, select, textarea { font: inherit; }
 
 /* ─── Scrollbar ──────────────────────────────────────────────────────── */
@@ -91,7 +89,6 @@ main {
   width: min(100%, var(--max-width));
   margin: 0 auto;
   padding: 1rem 1rem calc(var(--bottom-bar) + 1.5rem);
-  /* bottom padding reserves space above the mobile nav bar */
 }
 
 .page-shell {
@@ -99,17 +96,15 @@ main {
   gap: 1rem;
 }
 
-/* ─── Surface cards ──────────────────────────────────────────────────── */
+/* ─── Surface cards — solid white, strong border ─────────────────────── */
 .hero-panel,
 .panel,
 .card,
 .stack-card {
-  background: var(--glass);
-  border: 1px solid var(--glass-border);
+  background: var(--surface);
+  border: 1.5px solid var(--line);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
 }
 
 .hero-panel { padding: 1.5rem; }
@@ -157,7 +152,7 @@ main {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  padding: 0.3rem 0.7rem;
+  padding: 0.3rem 0.75rem;
   border-radius: 999px;
   font-size: 0.78rem;
   font-weight: 700;
@@ -166,12 +161,13 @@ main {
   white-space: nowrap;
   font-family: var(--font-display);
   letter-spacing: 0.02em;
+  border: 1px solid var(--line);
 }
 
-.badge-success { background: var(--success-soft); color: var(--success); }
-.badge-warning { background: var(--warning-soft); color: var(--warning); }
-.badge-danger  { background: var(--danger-soft);  color: var(--danger);  }
-.badge-primary { background: var(--primary-soft); color: var(--primary-dark); }
+.badge-success { background: var(--success-soft); color: var(--success);       border-color: #a7f3c0; }
+.badge-warning { background: var(--warning-soft); color: var(--warning);       border-color: #fde68a; }
+.badge-danger  { background: var(--danger-soft);  color: var(--danger);        border-color: #fca5a5; }
+.badge-primary { background: var(--primary-soft); color: var(--primary-dark);  border-color: #86efac; }
 
 /* ─── Form elements ──────────────────────────────────────────────────── */
 .input,
@@ -205,7 +201,7 @@ main {
 }
 
 .select {
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' fill='none'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23526058' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' fill='none'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%234a5e52' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 1rem center;
   padding-right: 2.5rem;
@@ -228,6 +224,7 @@ main {
   padding: 0.9rem 1rem;
   border-radius: var(--radius-sm);
   background: var(--surface-muted);
+  border: 1px solid var(--line);
   display: grid;
   gap: 0.2rem;
 }
@@ -271,7 +268,7 @@ main {
   width: 2.75rem;
   height: 2.75rem;
   border-radius: 999px;
-  background: var(--surface-accent);
+  background: var(--primary-soft);
   display: grid;
   place-items: center;
   font-weight: 800;
@@ -279,7 +276,7 @@ main {
   font-size: 0.9rem;
   color: var(--primary-dark);
   flex-shrink: 0;
-  border: 2px solid var(--glass-border);
+  border: 2px solid var(--line);
 }
 
 /* ─── App Header ─────────────────────────────────────────────────────── */
@@ -289,10 +286,10 @@ main {
   z-index: 30;
   padding: 0 1rem;
   height: var(--nav-height);
+  background: rgba(232, 237, 233, 0.95);
+  border-bottom: 1.5px solid var(--line);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  background: rgba(240, 244, 242, 0.85);
-  border-bottom: 1px solid var(--glass-border);
 }
 
 .app-header__inner {
@@ -353,17 +350,17 @@ main {
 
 /* ─── Mobile Bottom Navigation ───────────────────────────────────────── */
 .bottom-nav {
-  display: none; /* shown at ≤768px */
+  display: none;
   position: fixed;
   bottom: 0;
   left: 0;
   right: 0;
   z-index: 40;
   height: var(--bottom-bar);
-  background: rgba(240, 244, 242, 0.96);
+  background: rgba(232, 237, 233, 0.97);
+  border-top: 1.5px solid var(--line);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  border-top: 1px solid var(--glass-border);
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
@@ -413,6 +410,7 @@ main {
   height: 6px;
   border-radius: 999px;
   background: var(--surface-muted);
+  border: 1px solid var(--line);
   overflow: hidden;
 }
 
@@ -423,7 +421,7 @@ main {
   transition: width 600ms ease;
 }
 
-/* ─── Reliability ring ───────────────────────────────────────────────── */
+/* ─── Reliability pill ───────────────────────────────────────────────── */
 .reliability-pill {
   display: inline-flex;
   align-items: center;
@@ -434,34 +432,7 @@ main {
   color: var(--text-muted);
 }
 
-/* ─── Keyframes ──────────────────────────────────────────────────────── */
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
-@keyframes fadeInUp {
-  from { opacity: 0; transform: translateY(10px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-
-@keyframes pulse-dot {
-  0%, 100% { opacity: 1; }
-  50%       { opacity: 0.4; }
-}
-
-.animate-in {
-  animation: fadeInUp 300ms ease both;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .animate-in {
-    animation: none;
-    opacity: 1;
-    transform: none;
-  }
-}
-
-/* ─── Toast / message strip ──────────────────────────────────────────── */
+/* ─── Message strips ─────────────────────────────────────────────────── */
 .message-strip {
   padding: 0.75rem 1rem;
   border-radius: var(--radius-sm);
@@ -469,19 +440,33 @@ main {
   font-weight: 500;
   background: var(--surface-muted);
   color: var(--text-muted);
-  border: 1px solid var(--line);
+  border: 1.5px solid var(--line);
 }
 
 .message-strip.success {
   background: var(--success-soft);
-  color: var(--success);
-  border-color: #bbf7d0;
+  color: #15803d;
+  border-color: #86efac;
 }
 
 .message-strip.error {
   background: var(--danger-soft);
   color: var(--danger);
-  border-color: #fecaca;
+  border-color: #fca5a5;
+}
+
+/* ─── Keyframes ──────────────────────────────────────────────────────── */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.animate-in {
+  animation: fadeInUp 280ms ease both;
 }
 
 /* ─── Responsive ─────────────────────────────────────────────────────── */
@@ -495,7 +480,6 @@ main {
     grid-template-columns: 1fr;
   }
 
-  /* hide desktop nav links, show bottom bar */
   .nav-links {
     display: none;
   }
@@ -511,7 +495,6 @@ main {
 
   .title-xl { font-size: clamp(1.9rem, 10vw, 2.6rem); }
   .title-lg { font-size: clamp(1.3rem, 6vw, 1.8rem); }
-
   .hero-panel { padding: 1.25rem; }
   .panel      { padding: 1rem; }
 }
@@ -520,7 +503,7 @@ main {
   main { padding-left: 0.75rem; padding-right: 0.75rem; }
 }
 
-/* ─── Safe area on iOS notch devices ─────────────────────────────────── */
+/* ─── iOS safe area ──────────────────────────────────────────────────── */
 @supports (padding: max(0px)) {
   .app-header {
     padding-top: env(safe-area-inset-top, 0px);

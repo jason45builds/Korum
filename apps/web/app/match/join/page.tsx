@@ -13,19 +13,18 @@ import { joinMatch } from "@/services/api/match";
 function JoinMatchContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { isAuthenticated, loading } = useAuth();
+  const { isAuthenticated, loading: authLoading } = useAuth();
 
-  const [joinCode,     setJoinCode]     = useState(searchParams.get("joinCode") ?? "");
-  const [matchId,      setMatchId]      = useState(searchParams.get("matchId") ?? "");
-  const [inviteToken,  setInviteToken]  = useState(searchParams.get("invite") ?? "");
+  const [joinCode,    setJoinCode]    = useState(searchParams.get("joinCode") ?? "");
+  const [matchId,     setMatchId]     = useState(searchParams.get("matchId") ?? "");
+  const [inviteToken, setInviteToken] = useState(searchParams.get("invite") ?? "");
   const [message, setMessage] = useState<{ text: string; error: boolean } | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [autoJoining, setAutoJoining] = useState(false);
+  const [autoAttempted, setAutoAttempted] = useState(false);
 
   const submit = async () => {
     setSubmitting(true);
     setMessage(null);
-
     try {
       const response = await joinMatch({
         matchId:     matchId     || undefined,
@@ -33,87 +32,67 @@ function JoinMatchContent() {
         inviteToken: inviteToken || undefined,
       });
       router.push(`/match/${String(response.match.id)}`);
-    } catch (error) {
-      setMessage({ text: error instanceof Error ? error.message : "Could not join the match.", error: true });
-    } finally {
+    } catch (err) {
+      setMessage({ text: err instanceof Error ? err.message : "Could not join the match.", error: true });
       setSubmitting(false);
     }
   };
 
-  // Auto-join if params are present and user is authenticated
+  // Auto-join once when params exist and auth resolves
   useEffect(() => {
-    if (!loading && isAuthenticated && (inviteToken || matchId || joinCode)) {
-      setAutoJoining(true);
+    if (!authLoading && isAuthenticated && !autoAttempted && (inviteToken || matchId || joinCode)) {
+      setAutoAttempted(true);
       void submit();
     }
-  }, [inviteToken, isAuthenticated, loading, joinCode, matchId]); // eslint-disable-line
+  }, [authLoading, isAuthenticated]);
 
-  if (autoJoining && !message) {
-    return <main><Loader label="Joining match…" /></main>;
-  }
+  // Auth still loading
+  if (authLoading) return <main><Loader label="Loading…" /></main>;
+
+  // Auto-joining in progress
+  if (submitting && !message) return <main><Loader label="Joining match…" /></main>;
 
   return (
     <main>
       <div className="page-shell">
-        {/* Hero */}
         <section className="hero-panel animate-in">
           <p className="eyebrow">Join Match</p>
-          <h1 className="title-lg" style={{ marginTop: "0.4rem" }}>
-            Get on the squad list.
-          </h1>
+          <h1 className="title-lg" style={{ marginTop: "0.4rem" }}>Get on the squad list.</h1>
           <p className="muted" style={{ marginTop: "0.4rem", fontSize: "0.9rem" }}>
-            Use a link, invite token, or join code to get in. Your slot is provisional until payment clears.
+            Use a link, invite token, or join code. Your slot is provisional until payment clears.
           </p>
         </section>
 
-        {!loading && !isAuthenticated ? (
+        {!isAuthenticated ? (
           <AuthPanel
             title="Sign in to join"
-            description="OTP sign-in is required before Korum can attach you to a squad."
+            description="OTP sign-in required before Korum can attach you to a squad."
           />
         ) : (
           <Card eyebrow="Join Details" title="Enter match info">
             <div className="form-grid">
               <label className="label">
                 Match ID
-                <input
-                  className="input"
-                  placeholder="Leave blank if using a join code"
-                  value={matchId}
-                  onChange={(e) => setMatchId(e.target.value)}
-                />
+                <input className="input" placeholder="Leave blank if using a join code"
+                  value={matchId} onChange={(e) => setMatchId(e.target.value)} />
               </label>
-
               <label className="label">
                 Join code
-                <input
-                  className="input"
-                  placeholder="e.g. ABC123"
+                <input className="input" placeholder="e.g. ABC123"
                   value={joinCode}
                   style={{ letterSpacing: "0.12em", textTransform: "uppercase" }}
-                  onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
-                />
+                  onChange={(e) => setJoinCode(e.target.value.toUpperCase())} />
               </label>
-
               <label className="label">
                 Invite token
-                <input
-                  className="input"
-                  placeholder="From a direct invite link"
-                  value={inviteToken}
-                  onChange={(e) => setInviteToken(e.target.value)}
-                />
+                <input className="input" placeholder="From a direct invite link"
+                  value={inviteToken} onChange={(e) => setInviteToken(e.target.value)} />
               </label>
-
               <Button onClick={() => void submit()} loading={submitting} block>
                 Join Match
               </Button>
-
               {message && (
-                <p
-                  className={`message-strip${message.error ? " error" : " success"}`}
-                  role={message.error ? "alert" : "status"}
-                >
+                <p className={`message-strip${message.error ? " error" : " success"}`} role={message.error ? "alert" : "status"}>
                   {message.text}
                 </p>
               )}
