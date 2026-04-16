@@ -23,14 +23,14 @@ export default function TeamPage() {
   const [team, setTeam] = useState<TeamDetails | null>(null);
   const [matches, setMatches] = useState<MatchSummary[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!isAuthenticated) {
-      return;
-    }
+    if (!isAuthenticated) return;
 
     const load = async () => {
       setLoading(true);
+      setError(null);
       try {
         const [teamResponse, teamMatches] = await Promise.all([
           getTeamDetails(params.id),
@@ -38,6 +38,8 @@ export default function TeamPage() {
         ]);
         setTeam(teamResponse.team);
         setMatches(teamMatches);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Could not load team.");
       } finally {
         setLoading(false);
       }
@@ -49,15 +51,19 @@ export default function TeamPage() {
   if (!authLoading && !isAuthenticated) {
     return (
       <main>
-        <AuthPanel title="Sign in for team access" />
+        <div className="page-shell">
+          <AuthPanel title="Sign in for team access" />
+        </div>
       </main>
     );
   }
 
-  if (loading) {
+  if (loading) return <main><Loader label="Loading team…" /></main>;
+
+  if (error) {
     return (
       <main>
-        <Loader label="Loading team..." />
+        <EmptyState icon="⚠️" title="Could not load team" description={error} />
       </main>
     );
   }
@@ -66,6 +72,7 @@ export default function TeamPage() {
     return (
       <main>
         <EmptyState
+          icon="🔍"
           title="Team not found"
           description="That team could not be loaded for your account."
         />
@@ -79,7 +86,7 @@ export default function TeamPage() {
         <TeamHeader team={team} />
         <TeamStats team={team} activeMatches={matches.length} />
         <TeamMembers members={team.members} />
-        <section>
+        <section style={{ display: "grid", gap: "0.75rem" }}>
           <p className="eyebrow">Upcoming Matches</p>
           <MatchOverview matches={matches} />
         </section>

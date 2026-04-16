@@ -22,27 +22,25 @@ function MatchPaymentContent() {
     return (
       <main>
         <EmptyState
+          icon="🔗"
           title="Missing match ID"
-          description="Open this page with a valid `matchId` query parameter."
+          description="Open this page with a valid matchId query parameter."
         />
       </main>
     );
   }
 
   if (loading && !activeMatch) {
-    return (
-      <main>
-        <Loader label="Loading payment details..." />
-      </main>
-    );
+    return <main><Loader label="Loading payment details…" /></main>;
   }
 
   if (!activeMatch) {
     return (
       <main>
         <EmptyState
+          icon="🔍"
           title="Match not found"
-          description="Try reopening the payment link from the dashboard or match page."
+          description="Try reopening the payment link from your dashboard."
         />
       </main>
     );
@@ -51,23 +49,29 @@ function MatchPaymentContent() {
   if (!authLoading && !isAuthenticated) {
     return (
       <main>
-        <AuthPanel
-          title="Sign in to pay"
-          description="Payment confirmation is attached to your verified Korum account."
-        />
+        <div className="page-shell">
+          <section className="hero-panel animate-in">
+            <p className="eyebrow">Payment</p>
+            <h1 className="title-lg">{activeMatch.title}</h1>
+          </section>
+          <AuthPanel
+            title="Sign in to pay"
+            description="Payment confirmation is attached to your verified Korum account."
+          />
+        </div>
       </main>
     );
   }
 
-  const me = activeMatch.participants.find((participant) => participant.userId === profile?.id);
+  const me = activeMatch.participants.find((p) => p.userId === profile?.id);
 
   return (
     <main>
       <div className="page-shell">
-        <section className="hero-panel">
+        <section className="hero-panel animate-in">
           <p className="eyebrow">Payment</p>
           <h1 className="title-lg">{activeMatch.title}</h1>
-          <p className="muted">
+          <p className="muted" style={{ marginTop: "0.4rem", fontSize: "0.9rem" }}>
             Payment confirmation turns your RSVP into a protected squad slot.
           </p>
         </section>
@@ -77,8 +81,22 @@ function MatchPaymentContent() {
           <PaymentStatus paymentStatus={me?.paymentStatus} participantStatus={me?.status} />
         </div>
 
-        <section className="panel">
-          <PaymentButton matchId={activeMatch.id} profile={profile} />
+        <section className="panel animate-in" style={{ display: "grid", gap: "1rem" }}>
+          <div>
+            <p className="eyebrow">Complete Payment</p>
+            <h3 className="title-md">
+              {me && ["CONFIRMED", "LOCKED"].includes(me.status)
+                ? "You're already confirmed ✅"
+                : "Pay to lock your spot"}
+            </h3>
+          </div>
+          {me && ["CONFIRMED", "LOCKED"].includes(me.status) ? (
+            <p className="muted" style={{ fontSize: "0.9rem" }}>
+              Your payment is complete and your squad slot is secured.
+            </p>
+          ) : (
+            <PaymentButton matchId={activeMatch.id} profile={profile} />
+          )}
         </section>
       </div>
     </main>
@@ -87,7 +105,7 @@ function MatchPaymentContent() {
 
 export default function MatchPaymentPage() {
   return (
-    <Suspense fallback={<main><div className="panel">Loading payment screen...</div></main>}>
+    <Suspense fallback={<main><Loader label="Loading payment screen…" /></main>}>
       <MatchPaymentContent />
     </Suspense>
   );
