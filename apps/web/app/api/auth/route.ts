@@ -3,30 +3,30 @@ import { NextResponse } from "next/server";
 import { authProfileSchema } from "@/lib/validators";
 import { createAdminClient, requireAuthenticatedUser } from "@/services/supabase/server";
 
-const upsertProfileFromAuth = async (request: Request) => {
-  const admin = createAdminClient();
-  const { user } = await requireAuthenticatedUser(request);
+const upsertProfile = async (
+  admin: ReturnType<typeof createAdminClient>,
+  user: { id: string; phone?: string | null; email?: string | null; user_metadata?: Record<string, unknown> },
+  overrides?: Record<string, unknown>,
+) => {
+  const meta = user.user_metadata ?? {};
+  const fullName =
+    (typeof meta.full_name === "string" && meta.full_name) ||
+    (typeof meta.display_name === "string" && meta.display_name) ||
+    user.email?.split("@")[0] ||
+    user.phone ||
+    "Korum Player";
+
+  const phone = user.phone || `email-${user.id.slice(0, 8)}`;
 
   const payload = {
     id: user.id,
-    phone: user.phone ?? `user-${user.id.slice(0, 8)}`,
-    full_name:
-      (typeof user.user_metadata?.full_name === "string" && user.user_metadata.full_name) ||
-      (typeof user.user_metadata?.display_name === "string" && user.user_metadata.display_name) ||
-      user.phone ||
-      "Korum Player",
-    display_name:
-      (typeof user.user_metadata?.display_name === "string" && user.user_metadata.display_name) ||
-      (typeof user.user_metadata?.full_name === "string" && user.user_metadata.full_name) ||
-      user.phone ||
-      "Korum Player",
-    avatar_url:
-      typeof user.user_metadata?.avatar_url === "string" ? user.user_metadata.avatar_url : null,
-    default_sport:
-      typeof user.user_metadata?.default_sport === "string"
-        ? user.user_metadata.default_sport
-        : null,
-    city: typeof user.user_metadata?.city === "string" ? user.user_metadata.city : null,
+    phone,
+    full_name: fullName,
+    display_name: fullName,
+    avatar_url: typeof meta.avatar_url === "string" ? meta.avatar_url : null,
+    default_sport: typeof meta.default_sport === "string" ? meta.default_sport : null,
+    city: typeof meta.city === "string" ? meta.city : null,
+    ...overrides,
   };
 
   const { data, error } = await admin
@@ -35,16 +35,15 @@ const upsertProfileFromAuth = async (request: Request) => {
     .select("*")
     .single();
 
-  if (error) {
-    throw new Error(error.message);
-  }
-
+  if (error) throw new Error(error.message);
   return data;
 };
 
 export async function GET(request: Request) {
   try {
-    const profile = await upsertProfileFromAuth(request);
+    const admin = createAdminClient();
+    const { user } = await requireAuthenticatedUser(request);
+    const profile = await upsertProfile(admin, user);
     return NextResponse.json({ profile });
   } catch (error) {
     return NextResponse.json(
@@ -60,28 +59,15 @@ export async function POST(request: Request) {
     const { user } = await requireAuthenticatedUser(request);
     const payload = authProfileSchema.parse(await request.json());
 
-    const { data, error } = await admin
-      .from("users")
-      .upsert(
-        {
-          id: user.id,
-          phone: user.phone ?? `user-${user.id.slice(0, 8)}`,
-          full_name: payload.fullName,
-          display_name: payload.displayName ?? payload.fullName,
-          default_sport: payload.defaultSport ?? null,
-          city: payload.city ?? null,
-          role: payload.role ?? "player",
-        },
-        { onConflict: "id" },
-      )
-      .select("*")
-      .single();
+    const profile = await upsertProfile(admin, user, {
+      full_name: payload.fullName,
+      display_name: payload.displayName ?? payload.fullName,
+      default_sport: payload.defaultSport ?? null,
+      city: payload.city ?? null,
+      role: payload.role ?? "player",
+    });
 
-    if (error) {
-      throw new Error(error.message);
-    }
-
-    return NextResponse.json({ profile: data });
+    return NextResponse.json({ profile });
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : "Could not save profile." },
