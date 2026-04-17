@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { Buffer } from "buffer";
 
-import { assertServerEnv, env } from "@korum/config/env";
 import { createReceiptId } from "@/lib/helpers";
 import { createOrderSchema } from "@/lib/validators";
 import { createPaymentHoldExpiry } from "@/services/core/paymentRules";
@@ -19,24 +18,18 @@ export async function POST(request: Request) {
       .eq("id", payload.matchId)
       .single();
 
-    if (matchError || !match) {
-      throw new Error("Match not found.");
-    }
+    if (matchError || !match) throw new Error("Match not found.");
 
     if (!["RSVP_OPEN", "PAYMENT_PENDING"].includes(match.status)) {
       throw new Error("Match is not accepting payments.");
     }
 
-    const { data: existingParticipant, error: participantError } = await admin
+    const { data: existingParticipant } = await admin
       .from("match_participants")
       .select("*")
       .eq("match_id", payload.matchId)
       .eq("user_id", user.id)
       .maybeSingle();
-
-    if (participantError) {
-      throw new Error(participantError.message);
-    }
 
     const { data: reservedParticipant, error: reserveError } = await admin.rpc("reserve_match_slot", {
       p_match_id: payload.matchId,
@@ -75,11 +68,7 @@ export async function POST(request: Request) {
     }
 
     if (paymentRecord.status === "PAID" && paymentRecord.gateway_payment_id) {
-      return NextResponse.json({
-        alreadyPaid: true,
-        paymentId: paymentRecord.id,
-        matchId: payload.matchId,
-      });
+      return NextResponse.json({ alreadyPaid: true, paymentId: paymentRecord.id, matchId: payload.matchId });
     }
 
     if (amount === 0) {
@@ -93,9 +82,7 @@ export async function POST(request: Request) {
         p_event_id: `free-${paymentRecord.id}`,
       });
 
-      if (finalizeError) {
-        throw new Error(finalizeError.message);
-      }
+      if (finalizeError) throw new Error(finalizeError.message);
 
       return NextResponse.json({
         alreadyPaid: true,
@@ -106,10 +93,14 @@ export async function POST(request: Request) {
       });
     }
 
-    assertServerEnv(["razorpayKeyId", "razorpayKeySecret"]);
-    const razorpayAuthHeader = Buffer.from(
-      `${env.razorpayKeyId}:${env.razorpayKeySecret}`,
-    ).toString("base64");
+    const razorpayKeyId = process.env.RAZORPAY_KEY_ID;
+    const razorpayKeySecret = process.env.RAZORPAY_KEY_SECRET;
+
+    if (!razorpayKeyId || !razorpayKeySecret) {
+      throw new Error("Payment gateway not configured.");
+    }
+
+    const razorpayAuthHeader = Buffer.from(`${razorpayKeyId}:${razorpayKeySecret}`).toString("base64");
 
     const razorpayResponse = await fetch("https://api.razorpay.com/v1/orders", {
       method: "POST",
@@ -121,43 +112,26 @@ export async function POST(request: Request) {
         amount: Math.round(amount * 100),
         currency,
         receipt,
-        notes: {
-          matchId: payload.matchId,
-          userId: user.id,
-          paymentId: paymentRecord.id,
-        },
+        notes: { matchId: payload.matchId, userId: user.id, paymentId: paymentRecord.id },
       }),
     });
 
-    const order = (await razorpayResponse.json()) as {
-      id?: string;
-      error?: { description?: string };
-    };
+    const order = (await razorpayResponse.json()) as { id?: string; error?: { description?: string } };
 
     if (!razorpayResponse.ok || !order.id) {
       throw new Error(order.error?.description ?? "Could not create Razorpay order.");
     }
 
-    const { error: paymentUpdateError } = await admin
-      .from("payments")
-      .update({
-        gateway_order_id: order.id,
-        status: "PENDING",
-        receipt,
-        participant_id: reservedParticipant.id,
-      })
+    await admin.from("payments")
+      .update({ gateway_order_id: order.id, status: "PENDING", receipt, participant_id: reservedParticipant.id })
       .eq("id", paymentRecord.id);
-
-    if (paymentUpdateError) {
-      throw new Error(paymentUpdateError.message);
-    }
 
     return NextResponse.json({
       paymentId: paymentRecord.id,
       orderId: order.id,
       amount,
       currency,
-      keyId: env.razorpayKeyId,
+      keyId: razorpayKeyId,
       receipt,
       matchId: payload.matchId,
     });

@@ -1,17 +1,9 @@
-import { env } from "@korum/config/env";
-
 export const cn = (...values: Array<string | false | null | undefined>) =>
   values.filter(Boolean).join(" ");
 
-export const toErrorMessage = (error: unknown) => {
-  if (error instanceof Error) {
-    return error.message;
-  }
-
-  if (typeof error === "string") {
-    return error;
-  }
-
+export const toErrorMessage = (error: unknown): string => {
+  if (error instanceof Error) return error.message;
+  if (typeof error === "string") return error;
   return "Something went wrong.";
 };
 
@@ -25,24 +17,18 @@ export const getInitials = (value: string) =>
     .toUpperCase();
 
 export const buildMatchJoinLink = (matchId: string, joinCode?: string) => {
-  const url = new URL("/match/join", env.appUrl || "http://localhost:3000");
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://korum.vercel.app";
+  const url = new URL("/match/join", appUrl);
   url.searchParams.set("matchId", matchId);
-
-  if (joinCode) {
-    url.searchParams.set("joinCode", joinCode);
-  }
-
+  if (joinCode) url.searchParams.set("joinCode", joinCode);
   return url.toString();
 };
 
 export const buildInviteLink = (token: string, matchId?: string) => {
-  const url = new URL("/match/join", env.appUrl || "http://localhost:3000");
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://korum.vercel.app";
+  const url = new URL("/match/join", appUrl);
   url.searchParams.set("invite", token);
-
-  if (matchId) {
-    url.searchParams.set("matchId", matchId);
-  }
-
+  if (matchId) url.searchParams.set("matchId", matchId);
   return url.toString();
 };
 
@@ -53,19 +39,12 @@ export const toPaisa = (amount: number) => Math.round(amount * 100);
 
 export const parseJsonResponse = async <T>(response: Response): Promise<T> => {
   const payload = (await response.json().catch(() => ({}))) as { error?: string } & T;
-
-  if (!response.ok) {
-    throw new Error(payload.error ?? "Request failed.");
-  }
-
+  if (!response.ok) throw new Error(payload.error ?? "Request failed.");
   return payload;
 };
 
 export const copyToClipboard = async (value: string) => {
-  if (typeof navigator === "undefined" || !navigator.clipboard) {
-    return false;
-  }
-
+  if (typeof navigator === "undefined" || !navigator.clipboard) return false;
   await navigator.clipboard.writeText(value);
   return true;
 };

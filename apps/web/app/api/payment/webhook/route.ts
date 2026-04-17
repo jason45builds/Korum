@@ -1,18 +1,13 @@
 import { createHmac, timingSafeEqual } from "crypto";
-
 import { NextResponse } from "next/server";
 
-import { assertServerEnv, env } from "@korum/config/env";
 import { createAdminClient } from "@/services/supabase/server";
 
 const verifyWebhookSignature = (payload: string, signature: string | null) => {
-  assertServerEnv(["razorpayWebhookSecret"]);
-
-  if (!signature) {
-    throw new Error("Missing Razorpay webhook signature.");
-  }
-
-  const generated = createHmac("sha256", env.razorpayWebhookSecret).update(payload).digest("hex");
+  const secret = process.env.RAZORPAY_WEBHOOK_SECRET;
+  if (!secret) throw new Error("Razorpay webhook secret not configured.");
+  if (!signature) throw new Error("Missing Razorpay webhook signature.");
+  const generated = createHmac("sha256", secret).update(payload).digest("hex");
   return timingSafeEqual(Buffer.from(generated), Buffer.from(signature));
 };
 
@@ -30,32 +25,20 @@ export async function POST(request: Request) {
 
     const body = JSON.parse(rawBody) as {
       event?: string;
-      payload?: {
-        payment?: { entity?: Record<string, any> };
-        order?: { entity?: Record<string, any> };
-      };
+      payload?: { payment?: { entity?: Record<string, unknown> }; order?: { entity?: Record<string, unknown> } };
     };
 
     const paymentEntity = body.payload?.payment?.entity ?? {};
     const orderEntity = body.payload?.order?.entity ?? {};
     const notes = (paymentEntity.notes || orderEntity.notes || {}) as Record<string, string>;
 
-    let paymentRecord =
-      notes.paymentId
-        ? (
-            await admin
-              .from("payments")
-              .select("*")
-              .eq("id", notes.paymentId)
-              .maybeSingle()
-          ).data
-        : null;
+    let paymentRecord = notes.paymentId
+      ? (await admin.from("payments").select("*").eq("id", notes.paymentId).maybeSingle()).data
+      : null;
 
     if (!paymentRecord && (paymentEntity.order_id || orderEntity.id)) {
       paymentRecord = (
-        await admin
-          .from("payments")
-          .select("*")
+        await admin.from("payments").select("*")
           .eq("gateway_order_id", paymentEntity.order_id ?? orderEntity.id)
           .maybeSingle()
       ).data;
@@ -63,17 +46,11 @@ export async function POST(request: Request) {
 
     if (!paymentRecord && paymentEntity.id) {
       paymentRecord = (
-        await admin
-          .from("payments")
-          .select("*")
-          .eq("gateway_payment_id", paymentEntity.id)
-          .maybeSingle()
+        await admin.from("payments").select("*").eq("gateway_payment_id", paymentEntity.id).maybeSingle()
       ).data;
     }
 
-    if (!paymentRecord) {
-      return NextResponse.json({ ok: true, ignored: true });
-    }
+    if (!paymentRecord) return NextResponse.json({ ok: true, ignored: true });
 
     if (body.event === "payment.captured" || body.event === "order.paid") {
       const { error } = await admin.rpc("finalize_match_payment", {
@@ -85,15 +62,11 @@ export async function POST(request: Request) {
         p_gateway_signature: signature,
         p_event_id: eventId,
       });
-
-      if (error) {
-        throw new Error(error.message);
-      }
+      if (error) throw new Error(error.message);
     }
 
     if (body.event === "payment.failed") {
-      await admin
-        .from("payments")
+      await admin.from("payments")
         .update({
           status: "FAILED",
           gateway_order_id: paymentEntity.order_id ?? paymentRecord.gateway_order_id,
@@ -103,13 +76,8 @@ export async function POST(request: Request) {
         .eq("id", paymentRecord.id);
 
       if (paymentRecord.participant_id) {
-        await admin
-          .from("match_participants")
-          .update({
-            status: "RSVP",
-            payment_status: "FAILED",
-            hold_expires_at: null,
-          })
+        await admin.from("match_participants")
+          .update({ status: "RSVP", payment_status: "FAILED", hold_expires_at: null })
           .eq("id", paymentRecord.participant_id)
           .eq("status", "PAYMENT_PENDING");
       }

@@ -1,17 +1,15 @@
 import { createHmac, timingSafeEqual } from "crypto";
-
 import { NextResponse } from "next/server";
 
-import { assertServerEnv, env } from "@korum/config/env";
 import { verifyPaymentSchema } from "@/lib/validators";
 import { createAdminClient, requireAuthenticatedUser } from "@/services/supabase/server";
 
 const isSignatureValid = (orderId: string, paymentId: string, signature: string) => {
-  assertServerEnv(["razorpayKeySecret"]);
-  const generated = createHmac("sha256", env.razorpayKeySecret)
+  const secret = process.env.RAZORPAY_KEY_SECRET;
+  if (!secret) throw new Error("Razorpay secret not configured.");
+  const generated = createHmac("sha256", secret)
     .update(`${orderId}|${paymentId}`)
     .digest("hex");
-
   return timingSafeEqual(Buffer.from(generated), Buffer.from(signature));
 };
 
@@ -35,9 +33,7 @@ export async function POST(request: Request) {
       p_event_id: `client-${payload.razorpay_payment_id}`,
     });
 
-    if (error) {
-      throw new Error(error.message);
-    }
+    if (error) throw new Error(error.message);
 
     return NextResponse.json({ result });
   } catch (error) {

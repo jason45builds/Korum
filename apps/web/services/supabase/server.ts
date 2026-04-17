@@ -1,7 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
 
-import { assertPublicEnv, assertServerEnv, env } from "@korum/config/env";
-
 type AuthenticatedContext = {
   accessToken: string;
   user: {
@@ -14,62 +12,53 @@ type AuthenticatedContext = {
 
 export const getBearerToken = (request: Request) => {
   const header = request.headers.get("authorization") ?? request.headers.get("Authorization");
-
-  if (!header?.startsWith("Bearer ")) {
-    return null;
-  }
-
+  if (!header?.startsWith("Bearer ")) return null;
   return header.slice("Bearer ".length).trim();
 };
 
 export const createAdminClient = () => {
-  assertPublicEnv();
-  assertServerEnv(["supabaseServiceRoleKey"]);
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-  return createClient(env.supabaseUrl, env.supabaseServiceRoleKey, {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false,
-    },
+  if (!supabaseUrl || !serviceRoleKey) {
+    throw new Error(
+      `Missing server environment variables.\n` +
+      `NEXT_PUBLIC_SUPABASE_URL: ${supabaseUrl ? "✓" : "✗ MISSING"}\n` +
+      `SUPABASE_SERVICE_ROLE_KEY: ${serviceRoleKey ? "✓" : "✗ MISSING"}`
+    );
+  }
+
+  return createClient(supabaseUrl, serviceRoleKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
   });
 };
 
 export const createServerClient = (accessToken?: string) => {
-  assertPublicEnv();
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-  return createClient(env.supabaseUrl, env.supabaseAnonKey, {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false,
-    },
+  if (!supabaseUrl || !anonKey) {
+    throw new Error("Missing Supabase environment variables.");
+  }
+
+  return createClient(supabaseUrl, anonKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
     global: accessToken
-      ? {
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-          },
-        }
+      ? { headers: { Authorization: `Bearer ${accessToken}` } }
       : undefined,
   });
 };
 
 export const requireAuthenticatedUser = async (request: Request): Promise<AuthenticatedContext> => {
   const accessToken = getBearerToken(request);
-
-  if (!accessToken) {
-    throw new Error("Missing access token.");
-  }
+  if (!accessToken) throw new Error("Missing access token.");
 
   const client = createServerClient(accessToken);
   const { data, error } = await client.auth.getUser(accessToken);
 
-  if (error || !data.user) {
-    throw new Error("Authentication failed.");
-  }
+  if (error || !data.user) throw new Error("Authentication failed.");
 
-  return {
-    accessToken,
-    user: data.user,
-  };
+  return { accessToken, user: data.user };
 };
 
 const expectBooleanRpc = async (
@@ -77,11 +66,7 @@ const expectBooleanRpc = async (
   fallbackMessage: string,
 ) => {
   const { data, error } = await resultPromise;
-
-  if (error) {
-    throw new Error(error.message || fallbackMessage);
-  }
-
+  if (error) throw new Error(error.message || fallbackMessage);
   return Boolean(data);
 };
 
@@ -91,16 +76,10 @@ export const assertTeamCaptain = async (
   userId: string,
 ) => {
   const isCaptain = await expectBooleanRpc(
-    admin.rpc("is_team_captain", {
-      p_team_id: teamId,
-      p_user_id: userId,
-    }),
+    admin.rpc("is_team_captain", { p_team_id: teamId, p_user_id: userId }),
     "Could not verify captain access.",
   );
-
-  if (!isCaptain) {
-    throw new Error("Captain access required.");
-  }
+  if (!isCaptain) throw new Error("Captain access required.");
 };
 
 export const assertTeamMember = async (
@@ -109,16 +88,10 @@ export const assertTeamMember = async (
   userId: string,
 ) => {
   const isMember = await expectBooleanRpc(
-    admin.rpc("is_team_member", {
-      p_team_id: teamId,
-      p_user_id: userId,
-    }),
+    admin.rpc("is_team_member", { p_team_id: teamId, p_user_id: userId }),
     "Could not verify team membership.",
   );
-
-  if (!isMember) {
-    throw new Error("Team membership required.");
-  }
+  if (!isMember) throw new Error("Team membership required.");
 };
 
 export const assertMatchActor = async (
@@ -127,14 +100,8 @@ export const assertMatchActor = async (
   userId: string,
 ) => {
   const isActor = await expectBooleanRpc(
-    admin.rpc("is_match_actor", {
-      p_match_id: matchId,
-      p_user_id: userId,
-    }),
+    admin.rpc("is_match_actor", { p_match_id: matchId, p_user_id: userId }),
     "Could not verify match access.",
   );
-
-  if (!isActor) {
-    throw new Error("Match access required.");
-  }
+  if (!isActor) throw new Error("Match access required.");
 };

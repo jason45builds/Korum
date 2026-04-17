@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { toErrorMessage } from "@/lib/helpers";
 import { apiRequest } from "@/services/api/base";
@@ -10,7 +10,11 @@ import type { UserProfile } from "@korum/types/user";
 
 export const useAuth = () => {
   const [error, setError] = useState<string | null>(null);
-  const { accessToken, profile, loading, setLoading, setSession, setProfile, reset } = useUserStore();
+  const initialised = useRef(false);
+  const {
+    accessToken, profile, loading,
+    setLoading, setSession, setProfile, reset,
+  } = useUserStore();
 
   const refreshProfile = async () => {
     const response = await apiRequest<{ profile: UserProfile }>("/api/auth");
@@ -19,56 +23,64 @@ export const useAuth = () => {
   };
 
   useEffect(() => {
-    let client: ReturnType<typeof getSupabaseBrowserClient>;
-    try {
-      client = getSupabaseBrowserClient();
-    } catch (err) {
-      console.error(
-        "[Korum] Supabase client failed to initialize. " +
-        "Ensure NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY are set.",
-        err,
-      );
+    if (initialised.current) return;
+    initialised.current = true;
+
+    // Hard timeout: if Supabase doesn't resolve in 5s, stop loading
+    const timeout = setTimeout(() => {
       setLoading(false);
-      return;
-    }
+    }, 5000);
 
-    const initialize = async () => {
-      setLoading(true);
+    const run = async () => {
+      try {
+        const client = getSupabaseBrowserClient();
 
-      const {
-        data: { session },
-      } = await client.auth.getSession();
+        const { data: { session } } = await client.auth.getSession();
+        setSession(session?.access_token ?? null);
 
-      setSession(session?.access_token ?? null);
-
-      if (session?.access_token) {
-        try {
-          await refreshProfile();
-        } catch (currentError) {
-          setError(toErrorMessage(currentError));
+        if (session?.access_token) {
+          try {
+            await refreshProfile();
+          } catch (err) {
+            setError(toErrorMessage(err));
+          }
         }
+      } catch (err) {
+        // Supabase env vars missing or client failed — treat as logged out
+        console.error("[Korum] Auth init failed:", toErrorMessage(err));
+        setSession(null);
+      } finally {
+        clearTimeout(timeout);
+        setLoading(false);
       }
-
-      setLoading(false);
     };
 
-    void initialize();
+    void run();
 
-    const {
-      data: { subscription },
-    } = client.auth.onAuthStateChange((_event, session) => {
-      setSession(session?.access_token ?? null);
+    // Listen for auth state changes
+    let unsubscribe: (() => void) | null = null;
+    try {
+      const client = getSupabaseBrowserClient();
+      const { data: { subscription } } = client.auth.onAuthStateChange(
+        (_event, session) => {
+          setSession(session?.access_token ?? null);
+          if (!session?.access_token) {
+            reset();
+            return;
+          }
+          void refreshProfile().catch((err) => setError(toErrorMessage(err)));
+        }
+      );
+      unsubscribe = () => subscription.unsubscribe();
+    } catch {
+      // ignore — already handled above
+    }
 
-      if (!session?.access_token) {
-        reset();
-        return;
-      }
-
-      void refreshProfile().catch((currentError) => setError(toErrorMessage(currentError)));
-    });
-
-    return () => subscription.unsubscribe();
-  }, [reset, setLoading, setProfile, setSession]);
+    return () => {
+      clearTimeout(timeout);
+      unsubscribe?.();
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const signInWithOtp = async (phone: string, fullName?: string) => {
     setError(null);
@@ -82,10 +94,7 @@ export const useAuth = () => {
         },
       },
     });
-
-    if (authError) {
-      throw authError;
-    }
+    if (authError) throw authError;
   };
 
   const verifyOtp = async (phone: string, token: string) => {
@@ -96,16 +105,9 @@ export const useAuth = () => {
       token,
       type: "sms",
     });
-
-    if (verifyError) {
-      throw verifyError;
-    }
-
+    if (verifyError) throw verifyError;
     setSession(data.session?.access_token ?? null);
-
-    if (data.session?.access_token) {
-      await refreshProfile();
-    }
+    if (data.session?.access_token) await refreshProfile();
   };
 
   const saveProfile = async (payload: {
@@ -119,14 +121,15 @@ export const useAuth = () => {
       method: "POST",
       body: JSON.stringify(payload),
     });
-
     setProfile(response.profile);
     return response.profile;
   };
 
   const signOut = async () => {
-    const client = getSupabaseBrowserClient();
-    await client.auth.signOut();
+    try {
+      const client = getSupabaseBrowserClient();
+      await client.auth.signOut();
+    } catch { /* ignore */ }
     reset();
   };
 
