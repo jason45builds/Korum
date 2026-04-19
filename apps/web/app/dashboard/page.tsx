@@ -184,7 +184,10 @@ export default function DashboardPage() {
         {/* Matches */}
         <section style={{ display: "grid", gap: "0.75rem" }}>
           <p className="eyebrow" style={{ marginBottom: 0 }}>Match Overview</p>
-          <MatchOverview matches={dashboardMatches} />
+          <MatchOverview
+            matches={dashboardMatches}
+            captainMatchIds={new Set(dashboardMatches.filter((m) => m.captainId === profile?.id).map((m) => m.id))}
+          />
         </section>
 
         <PendingPayments payments={pendingPayments} />
