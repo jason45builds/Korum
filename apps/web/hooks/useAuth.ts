@@ -4,7 +4,6 @@ import { useEffect, useRef, useState } from "react";
 
 import { toErrorMessage } from "@/lib/helpers";
 import { apiRequest } from "@/services/api/base";
-import { getSupabaseBrowserClient } from "@/services/supabase/client";
 import { useUserStore } from "@/store/userStore";
 import type { UserProfile } from "@korum/types/user";
 
@@ -32,16 +31,20 @@ export const useAuth = () => {
     if (initialised.current) return;
     initialised.current = true;
 
-    const timeout = setTimeout(() => setLoading(false), 5000);
-    const client = getSupabaseBrowserClient();
+    // Absolute fallback — never stay loading more than 6 seconds
+    const timeout = setTimeout(() => {
+      setLoading(false);
+    }, 6000);
 
     const run = async () => {
       try {
+        // Dynamically import to avoid crashing at module load time
+        const { getSupabaseBrowserClient } = await import("@/services/supabase/client");
+        const client = getSupabaseBrowserClient();
+
         const { data: { session }, error: sessionError } = await client.auth.getSession();
 
-        if (sessionError) {
-          throw sessionError;
-        }
+        if (sessionError) throw sessionError;
 
         if (!session?.user) {
           reset();
@@ -49,10 +52,17 @@ export const useAuth = () => {
         }
 
         setAuthenticated(true);
-        await refreshProfile();
+
+        try {
+          await refreshProfile();
+        } catch (profileErr) {
+          setError(toErrorMessage(profileErr));
+          // Still authenticated even if profile fetch fails
+        }
       } catch (err) {
-        console.error("[Korum] Auth init failed:", toErrorMessage(err));
-        setError(toErrorMessage(err));
+        const msg = toErrorMessage(err);
+        console.error("[Korum] Auth init failed:", msg);
+        setError(msg);
         reset();
       } finally {
         clearTimeout(timeout);
@@ -62,23 +72,26 @@ export const useAuth = () => {
 
     void run();
 
+    // Set up auth state listener (best effort)
     let unsubscribe: (() => void) | null = null;
 
-    try {
-      const { data: { subscription } } = client.auth.onAuthStateChange((_event, session) => {
-        if (!session?.user) {
-          reset();
-          return;
-        }
-
-        setAuthenticated(true);
-        void refreshProfile().catch((err) => setError(toErrorMessage(err)));
-      });
-
-      unsubscribe = () => subscription.unsubscribe();
-    } catch {
-      // Ignore subscription setup failures and rely on explicit refreshes.
-    }
+    void (async () => {
+      try {
+        const { getSupabaseBrowserClient } = await import("@/services/supabase/client");
+        const client = getSupabaseBrowserClient();
+        const { data: { subscription } } = client.auth.onAuthStateChange((_event, session) => {
+          if (!session?.user) {
+            reset();
+            return;
+          }
+          setAuthenticated(true);
+          void refreshProfile().catch((err) => setError(toErrorMessage(err)));
+        });
+        unsubscribe = () => subscription.unsubscribe();
+      } catch {
+        // ignore — auth state listener is best-effort
+      }
+    })();
 
     return () => {
       clearTimeout(timeout);
@@ -86,13 +99,16 @@ export const useAuth = () => {
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const getClient = async () => {
+    const { getSupabaseBrowserClient } = await import("@/services/supabase/client");
+    return getSupabaseBrowserClient();
+  };
+
   const signInWithEmail = async (email: string, password: string) => {
     setError(null);
-    const client = getSupabaseBrowserClient();
+    const client = await getClient();
     const { error: err, data } = await client.auth.signInWithPassword({ email, password });
-
     if (err) throw err;
-
     if (data.session?.user) {
       setAuthenticated(true);
       await refreshProfile();
@@ -101,7 +117,7 @@ export const useAuth = () => {
 
   const signUpWithEmail = async (email: string, password: string, fullName?: string) => {
     setError(null);
-    const client = getSupabaseBrowserClient();
+    const client = await getClient();
     const { error: err, data } = await client.auth.signUp({
       email,
       password,
@@ -112,9 +128,7 @@ export const useAuth = () => {
         },
       },
     });
-
     if (err) throw err;
-
     if (data.session?.user) {
       setAuthenticated(true);
       await refreshProfile();
@@ -123,22 +137,19 @@ export const useAuth = () => {
 
   const signInWithOtp = async (phone: string, fullName?: string) => {
     setError(null);
-    const client = getSupabaseBrowserClient();
+    const client = await getClient();
     const { error: err } = await client.auth.signInWithOtp({
       phone,
       options: { data: { full_name: fullName ?? phone, display_name: fullName ?? phone } },
     });
-
     if (err) throw err;
   };
 
   const verifyOtp = async (phone: string, token: string) => {
     setError(null);
-    const client = getSupabaseBrowserClient();
+    const client = await getClient();
     const { error: err, data } = await client.auth.verifyOtp({ phone, token, type: "sms" });
-
     if (err) throw err;
-
     if (data.session?.user) {
       setAuthenticated(true);
       await refreshProfile();
@@ -156,19 +167,17 @@ export const useAuth = () => {
       method: "POST",
       body: JSON.stringify(payload),
     });
-
     setProfile(response.profile);
     return response.profile;
   };
 
   const signOut = async () => {
     try {
-      const client = getSupabaseBrowserClient();
+      const client = await getClient();
       await client.auth.signOut();
     } catch {
-      // Ignore sign-out cleanup issues and clear local state anyway.
+      // ignore
     }
-
     reset();
   };
 
