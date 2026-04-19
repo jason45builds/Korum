@@ -40,11 +40,31 @@ function JoinMatchContent() {
 
   // Auto-join once when params exist and auth resolves
   useEffect(() => {
-    if (!authLoading && isAuthenticated && !autoAttempted && (inviteToken || matchId || joinCode)) {
-      setAutoAttempted(true);
-      void submit();
+    if (authLoading || !isAuthenticated || autoAttempted || !(inviteToken || matchId || joinCode)) {
+      return;
     }
-  }, [authLoading, isAuthenticated]);
+
+    setAutoAttempted(true);
+
+    const autoJoin = async () => {
+      setSubmitting(true);
+      setMessage(null);
+
+      try {
+        const response = await joinMatch({
+          matchId: matchId || undefined,
+          joinCode: joinCode || undefined,
+          inviteToken: inviteToken || undefined,
+        });
+        router.push(`/match/${String(response.match.id)}`);
+      } catch (err) {
+        setMessage({ text: err instanceof Error ? err.message : "Could not join the match.", error: true });
+        setSubmitting(false);
+      }
+    };
+
+    void autoJoin();
+  }, [authLoading, autoAttempted, inviteToken, isAuthenticated, joinCode, matchId, router]);
 
   // Auth still loading
   if (authLoading) return <main><Loader label="Loading…" /></main>;

@@ -12,13 +12,19 @@ export const useAuth = () => {
   const [error, setError] = useState<string | null>(null);
   const initialised = useRef(false);
   const {
-    accessToken, profile, loading,
-    setLoading, setSession, setProfile, reset,
+    profile,
+    isAuthenticated,
+    loading,
+    setLoading,
+    setAuthenticated,
+    setProfile,
+    reset,
   } = useUserStore();
 
   const refreshProfile = async () => {
     const response = await apiRequest<{ profile: UserProfile }>("/api/auth");
     setProfile(response.profile);
+    setAuthenticated(true);
     return response.profile;
   };
 
@@ -26,20 +32,28 @@ export const useAuth = () => {
     if (initialised.current) return;
     initialised.current = true;
 
-    // Hard timeout — never get stuck loading
     const timeout = setTimeout(() => setLoading(false), 5000);
+    const client = getSupabaseBrowserClient();
 
     const run = async () => {
       try {
-        const client = getSupabaseBrowserClient();
-        const { data: { session } } = await client.auth.getSession();
-        setSession(session?.access_token ?? null);
-        if (session?.access_token) {
-          try { await refreshProfile(); } catch (err) { setError(toErrorMessage(err)); }
+        const { data: { session }, error: sessionError } = await client.auth.getSession();
+
+        if (sessionError) {
+          throw sessionError;
         }
+
+        if (!session?.user) {
+          reset();
+          return;
+        }
+
+        setAuthenticated(true);
+        await refreshProfile();
       } catch (err) {
         console.error("[Korum] Auth init failed:", toErrorMessage(err));
-        setSession(null);
+        setError(toErrorMessage(err));
+        reset();
       } finally {
         clearTimeout(timeout);
         setLoading(false);
@@ -49,27 +63,40 @@ export const useAuth = () => {
     void run();
 
     let unsubscribe: (() => void) | null = null;
+
     try {
-      const client = getSupabaseBrowserClient();
       const { data: { subscription } } = client.auth.onAuthStateChange((_event, session) => {
-        setSession(session?.access_token ?? null);
-        if (!session?.access_token) { reset(); return; }
+        if (!session?.user) {
+          reset();
+          return;
+        }
+
+        setAuthenticated(true);
         void refreshProfile().catch((err) => setError(toErrorMessage(err)));
       });
-      unsubscribe = () => subscription.unsubscribe();
-    } catch { /* ignore */ }
 
-    return () => { clearTimeout(timeout); unsubscribe?.(); };
+      unsubscribe = () => subscription.unsubscribe();
+    } catch {
+      // Ignore subscription setup failures and rely on explicit refreshes.
+    }
+
+    return () => {
+      clearTimeout(timeout);
+      unsubscribe?.();
+    };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Email/Password ──────────────────────────────────────────────────
   const signInWithEmail = async (email: string, password: string) => {
     setError(null);
     const client = getSupabaseBrowserClient();
     const { error: err, data } = await client.auth.signInWithPassword({ email, password });
+
     if (err) throw err;
-    setSession(data.session?.access_token ?? null);
-    if (data.session?.access_token) await refreshProfile();
+
+    if (data.session?.user) {
+      setAuthenticated(true);
+      await refreshProfile();
+    }
   };
 
   const signUpWithEmail = async (email: string, password: string, fullName?: string) => {
@@ -85,15 +112,15 @@ export const useAuth = () => {
         },
       },
     });
+
     if (err) throw err;
-    // If email confirmation is off, session is returned immediately
-    if (data.session?.access_token) {
-      setSession(data.session.access_token);
+
+    if (data.session?.user) {
+      setAuthenticated(true);
       await refreshProfile();
     }
   };
 
-  // ── Phone OTP ───────────────────────────────────────────────────────
   const signInWithOtp = async (phone: string, fullName?: string) => {
     setError(null);
     const client = getSupabaseBrowserClient();
@@ -101,6 +128,7 @@ export const useAuth = () => {
       phone,
       options: { data: { full_name: fullName ?? phone, display_name: fullName ?? phone } },
     });
+
     if (err) throw err;
   };
 
@@ -108,12 +136,15 @@ export const useAuth = () => {
     setError(null);
     const client = getSupabaseBrowserClient();
     const { error: err, data } = await client.auth.verifyOtp({ phone, token, type: "sms" });
+
     if (err) throw err;
-    setSession(data.session?.access_token ?? null);
-    if (data.session?.access_token) await refreshProfile();
+
+    if (data.session?.user) {
+      setAuthenticated(true);
+      await refreshProfile();
+    }
   };
 
-  // ── Profile ─────────────────────────────────────────────────────────
   const saveProfile = async (payload: {
     fullName: string;
     displayName?: string;
@@ -125,21 +156,27 @@ export const useAuth = () => {
       method: "POST",
       body: JSON.stringify(payload),
     });
+
     setProfile(response.profile);
     return response.profile;
   };
 
   const signOut = async () => {
-    try { const client = getSupabaseBrowserClient(); await client.auth.signOut(); } catch { /* ignore */ }
+    try {
+      const client = getSupabaseBrowserClient();
+      await client.auth.signOut();
+    } catch {
+      // Ignore sign-out cleanup issues and clear local state anyway.
+    }
+
     reset();
   };
 
   return {
-    accessToken,
     profile,
+    isAuthenticated,
     loading,
     error,
-    isAuthenticated: Boolean(accessToken),
     refreshProfile,
     signInWithEmail,
     signUpWithEmail,

@@ -2,6 +2,35 @@ import { NextResponse } from "next/server";
 
 import { authProfileSchema } from "@/lib/validators";
 import { createAdminClient, requireAuthenticatedUser } from "@/services/supabase/server";
+import type { UserProfile } from "@korum/types/user";
+
+type UserProfileRow = {
+  id: string;
+  phone: string;
+  full_name: string;
+  display_name: string;
+  avatar_url: string | null;
+  default_sport: string | null;
+  city: string | null;
+  reliability_score: number | string | null;
+  role: "captain" | "player" | null;
+  created_at: string;
+  updated_at: string;
+};
+
+const mapUserProfile = (profile: UserProfileRow): UserProfile => ({
+  id: profile.id,
+  phone: profile.phone,
+  fullName: profile.full_name,
+  displayName: profile.display_name,
+  avatarUrl: profile.avatar_url,
+  defaultSport: profile.default_sport,
+  city: profile.city,
+  reliabilityScore: Number(profile.reliability_score ?? 0),
+  role: profile.role === "captain" ? "captain" : "player",
+  createdAt: profile.created_at,
+  updatedAt: profile.updated_at,
+});
 
 const upsertProfile = async (
   admin: ReturnType<typeof createAdminClient>,
@@ -36,7 +65,7 @@ const upsertProfile = async (
     .single();
 
   if (error) throw new Error(error.message);
-  return data;
+  return mapUserProfile(data as UserProfileRow);
 };
 
 export async function GET(request: Request) {

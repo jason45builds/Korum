@@ -1,6 +1,6 @@
 # Korum
 
-Korum is a production-ready, mobile-first sports match readiness platform built with Next.js, Supabase, Razorpay, and Zustand. It helps captains create matches, invite players, confirm availability, collect payments, and lock squads before kickoff.
+Korum is a production-ready, mobile-first sports match readiness platform built for Vercel and Supabase. It helps captains create matches, invite players, confirm availability, collect payments, and lock squads before kickoff.
 
 ## Core Flow
 
@@ -14,10 +14,11 @@ The product intentionally stops at match readiness. It does not include live sco
 
 ## Stack
 
-- Next.js App Router with TypeScript
-- Supabase PostgreSQL, Auth OTP, and Realtime
+- Next.js App Router with TypeScript on Vercel
+- Supabase PostgreSQL, Auth, Realtime, and SSR cookie sessions via `@supabase/ssr`
 - Razorpay order + webhook integration
-- Zustand for lightweight client state
+- Zustand for lightweight client UI state
+- SQL-first schema and business rules in Supabase migrations
 
 ## Scripts
 
@@ -30,15 +31,16 @@ npm run build
 npm run lint
 ```
 
-`npm install` from the repo root automatically installs `apps/web` using its local lockfile.
+The root scripts now preload repo-level `.env` or `.env.local` before running the app in `apps/web`, which keeps local development and Vercel builds aligned.
 
 ## Environment
 
-Populate `.env` with:
+Populate Vercel project env vars, or create a local repo-root `.env` from `.env.example`, with:
 
 - `NEXT_PUBLIC_APP_URL`
 - `NEXT_PUBLIC_SUPABASE_URL`
-- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
+- `NEXT_PUBLIC_SUPABASE_ANON_KEY` (optional fallback for older projects)
 - `SUPABASE_SERVICE_ROLE_KEY`
 - `RAZORPAY_KEY_ID`
 - `RAZORPAY_KEY_SECRET`
@@ -53,3 +55,4 @@ Apply the SQL files in `supabase/migrations` in ascending order, then optionally
 - Match lifecycle is enforced as `DRAFT -> RSVP_OPEN -> PAYMENT_PENDING -> LOCKED -> READY`.
 - Slot protection happens in the database and in payment finalization routines.
 - Payment webhooks are idempotent and can safely handle retries.
+- Auth is cookie-based for SSR and route handlers, which is a better fit for Vercel + Supabase than manually forwarding access tokens through the frontend.

@@ -3,17 +3,17 @@ import { create } from "zustand";
 
 type UserStore = AuthState & {
   setLoading: (loading: boolean) => void;
-  setSession: (accessToken: string | null) => void;
+  setAuthenticated: (isAuthenticated: boolean) => void;
   setProfile: (profile: UserProfile | null) => void;
   reset: () => void;
 };
 
 export const useUserStore = create<UserStore>((set) => ({
-  accessToken: null,
   profile: null,
+  isAuthenticated: false,
   loading: true,
   setLoading: (loading) => set({ loading }),
-  setSession: (accessToken) => set({ accessToken }),
+  setAuthenticated: (isAuthenticated) => set({ isAuthenticated }),
   setProfile: (profile) => set({ profile }),
-  reset: () => set({ accessToken: null, profile: null, loading: false }),
+  reset: () => set({ profile: null, isAuthenticated: false, loading: false }),
 }));

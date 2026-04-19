@@ -13,7 +13,7 @@ export default function NotFound() {
               Page not found.
             </h1>
             <p className="muted" style={{ marginTop: "0.4rem", fontSize: "0.9rem" }}>
-              That URL doesn't exist. It may have been moved, deleted, or you may have followed a broken link.
+              That URL doesn&apos;t exist. It may have been moved, deleted, or you may have followed a broken link.
             </p>
           </div>
 

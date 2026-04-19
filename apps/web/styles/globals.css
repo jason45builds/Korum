@@ -48,9 +48,6 @@
   --nav-height:      60px;
   --bottom-bar:      68px;
 
-  /* Type */
-  --font-display:    'Syne', sans-serif;
-  --font-body:       'DM Sans', sans-serif;
 }
 
 /* ─── Reset ─────────────────────────────────────────────────────────── */
@@ -70,7 +67,7 @@ body {
     radial-gradient(ellipse 50% 40% at 5% 80%, rgba(22,163,74,0.08), transparent),
     var(--bg);
   color: var(--text);
-  font-family: var(--font-body);
+  font-family: var(--font-body), sans-serif;
   font-size: 16px;
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;

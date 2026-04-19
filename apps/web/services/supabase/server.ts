@@ -1,7 +1,11 @@
-import { createClient } from "@supabase/supabase-js";
+import { cookies } from "next/headers";
+import { createServerClient as createSupabaseServerClient } from "@supabase/ssr";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+
+import { getSupabasePublicEnv, getSupabaseServiceRoleKey } from "@/services/supabase/env";
 
 type AuthenticatedContext = {
-  accessToken: string;
+  accessToken: string | null;
   user: {
     id: string;
     phone?: string | null;
@@ -12,51 +16,72 @@ type AuthenticatedContext = {
 
 export const getBearerToken = (request: Request) => {
   const header = request.headers.get("authorization") ?? request.headers.get("Authorization");
-  if (!header?.startsWith("Bearer ")) return null;
+
+  if (!header?.startsWith("Bearer ")) {
+    return null;
+  }
+
   return header.slice("Bearer ".length).trim();
 };
 
 export const createAdminClient = () => {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const { url } = getSupabasePublicEnv();
+  const serviceRoleKey = getSupabaseServiceRoleKey();
 
-  if (!supabaseUrl || !serviceRoleKey) {
-    throw new Error(
-      `Missing server environment variables.\n` +
-      `NEXT_PUBLIC_SUPABASE_URL: ${supabaseUrl ? "✓" : "✗ MISSING"}\n` +
-      `SUPABASE_SERVICE_ROLE_KEY: ${serviceRoleKey ? "✓" : "✗ MISSING"}`
-    );
-  }
-
-  return createClient(supabaseUrl, serviceRoleKey, {
+  return createClient(url, serviceRoleKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 };
 
-export const createServerClient = (accessToken?: string) => {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+const createCookieServerClient = (): SupabaseClient => {
+  const { url, publishableKey } = getSupabasePublicEnv();
+  const cookieStore = cookies();
 
-  if (!supabaseUrl || !anonKey) {
-    throw new Error("Missing Supabase environment variables.");
-  }
-
-  return createClient(supabaseUrl, anonKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
-    global: accessToken
-      ? { headers: { Authorization: `Bearer ${accessToken}` } }
-      : undefined,
+  return createSupabaseServerClient(url, publishableKey, {
+    cookies: {
+      getAll() {
+        return cookieStore.getAll();
+      },
+      setAll(cookiesToSet) {
+        try {
+          cookiesToSet.forEach(({ name, value, options }) => {
+            cookieStore.set(name, value, options);
+          });
+        } catch {
+          // Server components cannot mutate cookies. Middleware handles refresh persistence.
+        }
+      },
+    },
   });
 };
+
+const createAccessTokenServerClient = (accessToken: string): SupabaseClient => {
+  const { url, publishableKey } = getSupabasePublicEnv();
+
+  return createClient(url, publishableKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+    global: {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    },
+  });
+};
+
+export const createServerClient = (accessToken?: string) =>
+  accessToken ? createAccessTokenServerClient(accessToken) : createCookieServerClient();
 
 export const requireAuthenticatedUser = async (request: Request): Promise<AuthenticatedContext> => {
   const accessToken = getBearerToken(request);
-  if (!accessToken) throw new Error("Missing access token.");
+  const client = createServerClient(accessToken ?? undefined);
 
-  const client = createServerClient(accessToken);
-  const { data, error } = await client.auth.getUser(accessToken);
+  const { data, error } = accessToken
+    ? await client.auth.getUser(accessToken)
+    : await client.auth.getUser();
 
-  if (error || !data.user) throw new Error("Authentication failed.");
+  if (error || !data.user) {
+    throw new Error("Authentication failed.");
+  }
 
   return { accessToken, user: data.user };
 };
@@ -66,7 +91,11 @@ const expectBooleanRpc = async (
   fallbackMessage: string,
 ) => {
   const { data, error } = await resultPromise;
-  if (error) throw new Error(error.message || fallbackMessage);
+
+  if (error) {
+    throw new Error(error.message || fallbackMessage);
+  }
+
   return Boolean(data);
 };
 
@@ -79,7 +108,10 @@ export const assertTeamCaptain = async (
     admin.rpc("is_team_captain", { p_team_id: teamId, p_user_id: userId }),
     "Could not verify captain access.",
   );
-  if (!isCaptain) throw new Error("Captain access required.");
+
+  if (!isCaptain) {
+    throw new Error("Captain access required.");
+  }
 };
 
 export const assertTeamMember = async (
@@ -91,7 +123,10 @@ export const assertTeamMember = async (
     admin.rpc("is_team_member", { p_team_id: teamId, p_user_id: userId }),
     "Could not verify team membership.",
   );
-  if (!isMember) throw new Error("Team membership required.");
+
+  if (!isMember) {
+    throw new Error("Team membership required.");
+  }
 };
 
 export const assertMatchActor = async (
@@ -103,5 +138,8 @@ export const assertMatchActor = async (
     admin.rpc("is_match_actor", { p_match_id: matchId, p_user_id: userId }),
     "Could not verify match access.",
   );
-  if (!isActor) throw new Error("Match access required.");
+
+  if (!isActor) {
+    throw new Error("Match access required.");
+  }
 };

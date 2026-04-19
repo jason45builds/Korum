@@ -207,7 +207,7 @@ export default function CreatePollPage() {
             {currentRows.length === 0 ? (
               <div style={{ textAlign: "center", padding: "1.5rem 0" }}>
                 <p className="muted" style={{ fontSize: "0.9rem" }}>
-                  Enter a Match ID and click "Load Existing" to see saved slots.
+                  Enter a Match ID and click &quot;Load Existing&quot; to see saved slots.
                 </p>
               </div>
             ) : (

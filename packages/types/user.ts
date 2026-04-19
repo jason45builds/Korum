@@ -20,7 +20,7 @@ export type OtpRequestPayload = {
 };
 
 export type AuthState = {
-  accessToken: string | null;
   profile: UserProfile | null;
+  isAuthenticated: boolean;
   loading: boolean;
 };

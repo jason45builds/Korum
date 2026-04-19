@@ -39,20 +39,28 @@ export default function CreateMatchPage() {
     notes: "",
   });
 
-  const loadTeams = async () => {
-    const response = await getMyTeams();
-    setTeams(response.teams);
-    if (!form.teamId && response.teams[0]) {
-      setForm((c) => ({ ...c, teamId: response.teams[0].id, sport: response.teams[0].sport }));
-    }
-  };
-
   useEffect(() => {
-    if (isAuthenticated) {
-      void loadTeams().catch(() =>
-        setMatchMsg({ text: "Could not load your teams.", error: true }),
-      );
-    }
+    if (!isAuthenticated) return;
+
+    const loadTeams = async () => {
+      const response = await getMyTeams();
+      setTeams(response.teams);
+      setForm((current) => {
+        if (current.teamId || !response.teams[0]) {
+          return current;
+        }
+
+        return {
+          ...current,
+          teamId: response.teams[0].id,
+          sport: response.teams[0].sport,
+        };
+      });
+    };
+
+    void loadTeams().catch(() =>
+      setMatchMsg({ text: "Could not load your teams.", error: true }),
+    );
   }, [isAuthenticated]);
 
   // Show auth panel immediately once auth resolves as unauthenticated
@@ -89,7 +97,19 @@ export default function CreateMatchPage() {
       const res = await createTeam(teamDraft);
       setCreateTeamMsg({ text: `Created "${res.team.name}".`, error: false });
       setTeamDraft({ name: "", sport: "Football", city: "" });
-      await loadTeams();
+      const response = await getMyTeams();
+      setTeams(response.teams);
+      setForm((current) => {
+        if (current.teamId || !response.teams[0]) {
+          return current;
+        }
+
+        return {
+          ...current,
+          teamId: response.teams[0].id,
+          sport: response.teams[0].sport,
+        };
+      });
     } catch (err) {
       setCreateTeamMsg({ text: err instanceof Error ? err.message : "Could not create team.", error: true });
     } finally {

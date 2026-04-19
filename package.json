@@ -5,11 +5,11 @@
   "description": "Korum — mobile-first sports match readiness platform.",
   "scripts": {
     "postinstall": "npm --prefix apps/web install",
-    "dev": "npm --prefix apps/web run dev",
-    "build": "npm --prefix apps/web run build",
-    "start": "npm --prefix apps/web run start",
-    "lint": "npm --prefix apps/web run lint",
-    "typecheck": "npm --prefix apps/web run typecheck"
+    "dev": "node scripts/run-app.mjs dev",
+    "build": "node scripts/run-app.mjs build",
+    "start": "node scripts/run-app.mjs start",
+    "lint": "node scripts/run-app.mjs lint",
+    "typecheck": "node scripts/run-app.mjs typecheck"
   },
   "dependencies": {
     "next": "14.2.35"
