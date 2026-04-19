@@ -46,7 +46,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
             <nav className="nav-links" aria-label="Main navigation">
               <Link href="/dashboard" className="nav-link">Dashboard</Link>
               <Link href="/create/match" className="nav-link">Create Match</Link>
-              <Link href="/create/poll" className="nav-link">Availability</Link>
+              <Link href="/availability" className="nav-link">My Availability</Link>
               <Link href="/match/join" className="nav-link">Join Match</Link>
             </nav>
           </div>
@@ -105,7 +105,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
               Create
             </Link>
 
-            <Link href="/create/poll" className="bottom-nav__item">
+            <Link href="/availability" className="bottom-nav__item">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true">
                 <path d="M9 11l3 3L22 4" />
                 <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" />
