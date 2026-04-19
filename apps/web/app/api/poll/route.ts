@@ -42,10 +42,18 @@ export async function GET(request: Request) {
       const admin = createAdminClient();
       const { data: match } = await admin
         .from("matches")
-        .select("id, title, venue_name, starts_at, price_per_player, squad_size, status, join_code")
+        .select("id, title, venue_name, starts_at, price_per_player, squad_size, status, join_code, captain_id")
         .eq("id", link.match_id)
         .single();
-      matchInfo = match;
+      if (match) {
+        // Get captain UPI details
+        const { data: captain } = await admin
+          .from("users")
+          .select("full_name, display_name, upi_id, upi_name")
+          .eq("id", match.captain_id)
+          .single();
+        matchInfo = { ...match, captain };
+      }
     }
 
     let checkInfo = null;
@@ -107,11 +115,41 @@ export async function POST(request: Request) {
   }
 }
 
-// PATCH /api/poll — player responds (no auth needed)
+// PATCH /api/poll — player responds OR captain confirms/rejects (no auth for player)
 export async function PATCH(request: Request) {
   try {
-    const db = getAnonClient();
+    // Try to parse as captain action first
+    const raw = await request.json() as Record<string, unknown>;
 
+    // Captain confirm/reject
+    if ('captainAction' in raw) {
+      const admin = createAdminClient();
+      await requireAuthenticatedUser(request);
+      const { responseId, captainAction, rejectionNote } = z.object({
+        responseId:    z.string().uuid(),
+        captainAction: z.enum(["confirm", "reject"]),
+        rejectionNote: z.string().max(200).optional(),
+      }).parse(raw);
+
+      const update: Record<string, unknown> = {
+        captain_confirmed: captainAction === "confirm",
+        confirmed_at: captainAction === "confirm" ? new Date().toISOString() : null,
+        rejection_note: rejectionNote ?? null,
+      };
+
+      const { data, error } = await admin
+        .from("anon_responses")
+        .update(update)
+        .eq("id", responseId)
+        .select("*")
+        .single();
+
+      if (error) throw new Error(error.message);
+      return NextResponse.json({ response: data });
+    }
+
+    // Player response (no auth needed)
+    const db = getAnonClient();
     const body = z.object({
       pollLinkId:     z.string().uuid(),
       playerName:     z.string().min(1).max(80),
@@ -119,11 +157,10 @@ export async function PATCH(request: Request) {
       response:       z.enum(["YES", "NO", "MAYBE"]),
       paymentClaimed: z.boolean().default(false),
       paymentNote:    z.string().max(200).optional(),
-      responseId:     z.string().uuid().optional(), // for updating existing response
-    }).parse(await request.json());
+      responseId:     z.string().uuid().optional(),
+    }).parse(raw);
 
     if (body.responseId) {
-      // Update existing
       const { data, error } = await db
         .from("anon_responses")
         .update({
@@ -138,7 +175,6 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ response: data });
     }
 
-    // New response
     const { data, error } = await db
       .from("anon_responses")
       .insert({

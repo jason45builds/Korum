@@ -22,6 +22,8 @@ export const authProfileSchema = z.object({
   defaultSport: z.string().trim().max(40).optional().nullable(),
   city: z.string().trim().max(80).optional().nullable(),
   role: z.enum(["captain", "player"]).optional(),
+  upiId: z.string().trim().max(50).optional().nullable(),
+  upiName: z.string().trim().max(80).optional().nullable(),
 });
 
 export const createTeamSchema = z.object({

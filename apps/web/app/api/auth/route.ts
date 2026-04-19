@@ -28,6 +28,8 @@ const mapUserProfile = (profile: UserProfileRow): UserProfile => ({
   city: profile.city,
   reliabilityScore: Number(profile.reliability_score ?? 0),
   role: profile.role === "captain" ? "captain" : "player",
+  upiId: (profile as UserProfileRow & { upi_id?: string | null }).upi_id ?? null,
+  upiName: (profile as UserProfileRow & { upi_name?: string | null }).upi_name ?? null,
   createdAt: profile.created_at,
   updatedAt: profile.updated_at,
 });
@@ -94,6 +96,8 @@ export async function POST(request: Request) {
       default_sport: payload.defaultSport ?? null,
       city: payload.city ?? null,
       role: payload.role ?? "player",
+      ...(payload.upiId !== undefined ? { upi_id: payload.upiId } : {}),
+      ...(payload.upiName !== undefined ? { upi_name: payload.upiName } : {}),
     });
 
     return NextResponse.json({ profile });

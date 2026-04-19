@@ -10,6 +10,8 @@ export type UserProfile = {
   city: string | null;
   reliabilityScore: number;
   role: UserRole;
+  upiId: string | null;
+  upiName: string | null;
   createdAt: string;
   updatedAt: string;
 };

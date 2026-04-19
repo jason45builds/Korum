@@ -3,447 +3,319 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 
+type Captain = { full_name: string; display_name: string; upi_id: string | null; upi_name: string | null };
+type MatchInfo = {
+  id: string; title: string; venue_name: string; starts_at: string;
+  price_per_player: number; squad_size: number; status: string; join_code: string;
+  captain: Captain | null;
+};
+type CheckInfo = { id: string; match_date: string; match_time: string | null; venue_hint: string | null; note: string | null };
+type AnonResponse = { id: string; player_name: string; response: string; payment_claimed: boolean; captain_confirmed: boolean | null };
 type PollData = {
   link: { id: string; token: string; name: string | null; expiresAt: string };
-  match: {
-    id: string; title: string; venue_name: string; starts_at: string;
-    price_per_player: number; squad_size: number; status: string; join_code: string;
-  } | null;
-  check: {
-    id: string; match_date: string; match_time: string | null; venue_hint: string | null; note: string | null;
-  } | null;
-  responses: Array<{
-    id: string; player_name: string; response: string;
-    payment_claimed: boolean; payment_note: string | null; created_at: string;
-  }>;
+  match: MatchInfo | null;
+  check: CheckInfo | null;
+  responses: AnonResponse[];
   summary: { yes: number; no: number; maybe: number; total: number };
 };
 
-type Step = "landing" | "name" | "response" | "payment" | "done";
+type Step = "landing" | "name" | "payment_now" | "claimed" | "no_done" | "maybe_done";
 
 export default function PlayerPollPage() {
   const { token } = useParams<{ token: string }>();
-  const [data, setData]         = useState<PollData | null>(null);
-  const [error, setError]       = useState<string | null>(null);
-  const [step, setStep]         = useState<Step>("landing");
-  const [name, setName]         = useState("");
-  const [phone, setPhone]       = useState("");
-  const [response, setResponse] = useState<"YES" | "NO" | "MAYBE" | null>(null);
-  const [myResponseId, setMyResponseId] = useState<string | null>(null);
-  const [submitting, setSubmitting]     = useState(false);
-  const [paymentClaimed, setPaymentClaimed] = useState(false);
+  const [data, setData]       = useState<PollData | null>(null);
+  const [err,  setErr]        = useState<string | null>(null);
+  const [step, setStep]       = useState<Step>("landing");
+  const [name, setName]       = useState("");
+  const [phone, setPhone]     = useState("");
+  const [myId, setMyId]       = useState<string | null>(null);
+  const [saving, setSaving]   = useState(false);
+  const [upiCopied, setUpiCopied] = useState(false);
 
-  useEffect(() => { void load(); }, [token]);
+  useEffect(() => { void load(); }, [token]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const load = async () => {
     try {
       const res  = await fetch(`/api/poll?token=${token}`);
       const json = await res.json() as PollData & { error?: string };
-      if (!res.ok) { setError(json.error ?? "Poll not found"); return; }
+      if (!res.ok) { setErr(json.error ?? "Poll not found"); return; }
       setData(json);
-      setStep("landing");
-    } catch { setError("Could not load poll"); }
+    } catch { setErr("Could not load this link"); }
   };
 
-  const submit = async (resp: "YES" | "NO" | "MAYBE") => {
-    if (!name.trim() || !data) return;
-    setSubmitting(true);
+  // Submit YES/NO/MAYBE
+  const respond = async (response: "YES" | "NO" | "MAYBE", paymentClaimed = false) => {
+    if (!data || !name.trim()) return;
+    setSaving(true);
     try {
       const res = await fetch("/api/poll", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          pollLinkId:  data.link.id,
-          playerName:  name.trim(),
-          playerPhone: phone.trim() || undefined,
-          response:    resp,
-        }),
+        body: JSON.stringify({ pollLinkId: data.link.id, playerName: name.trim(), playerPhone: phone.trim() || undefined, response, paymentClaimed }),
       });
       const json = await res.json() as { response?: { id: string }; error?: string };
       if (!res.ok) throw new Error(json.error);
-      setResponse(resp);
-      setMyResponseId(json.response?.id ?? null);
-      if (resp === "YES" && data.match?.price_per_player && data.match.price_per_player > 0) {
-        setStep("payment");
-      } else {
-        setStep("done");
-      }
-    } catch (err) {
-      alert(err instanceof Error ? err.message : "Failed to submit");
-    } finally { setSubmitting(false); }
+      setMyId(json.response?.id ?? null);
+    } catch (e) { alert(e instanceof Error ? e.message : "Failed"); } finally { setSaving(false); }
   };
 
-  const claimPayment = async () => {
-    if (!myResponseId || !data) return;
-    setSubmitting(true);
+  const handleYes = async () => {
+    await respond("YES", false);
+    setStep("payment_now");
+  };
+
+  const handleNo = async () => {
+    await respond("NO");
+    setStep("no_done");
+  };
+
+  const handleMaybe = async () => {
+    await respond("MAYBE");
+    setStep("maybe_done");
+  };
+
+  const handleClaimPaid = async () => {
+    if (!myId || !data) return;
+    setSaving(true);
     try {
       await fetch("/api/poll", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          pollLinkId:     data.link.id,
-          playerName:     name,
-          response:       "YES",
-          responseId:     myResponseId,
-          paymentClaimed: true,
-          paymentNote:    "Player claimed payment via UPI",
-        }),
+        body: JSON.stringify({ pollLinkId: data.link.id, playerName: name, response: "YES", responseId: myId, paymentClaimed: true, paymentNote: "Paid via UPI" }),
       });
-      setPaymentClaimed(true);
-      setStep("done");
-    } finally { setSubmitting(false); }
+      setStep("claimed");
+    } finally { setSaving(false); }
   };
 
-  // ── Loading ──
-  if (!data && !error) {
-    return (
-      <div style={styles.page}>
-        <div style={styles.card}>
-          <div style={styles.spinner} />
-          <p style={{ color: "#888", marginTop: "1rem", fontSize: "0.9rem" }}>Loading…</p>
-        </div>
-      </div>
-    );
-  }
+  const copyUpi = async (upi: string) => {
+    try { await navigator.clipboard.writeText(upi); setUpiCopied(true); setTimeout(() => setUpiCopied(false), 2000); } catch { /* ignore */ }
+  };
 
-  // ── Error ──
-  if (error) {
-    return (
-      <div style={styles.page}>
-        <div style={styles.card}>
-          <div style={{ fontSize: "3rem", marginBottom: "1rem" }}>😕</div>
-          <h2 style={{ margin: "0 0 0.5rem", fontWeight: 700 }}>Poll not found</h2>
-          <p style={{ color: "#888", fontSize: "0.9rem" }}>{error}</p>
-        </div>
-      </div>
-    );
-  }
+  const openUpiApp = (upi: string, amount: number) => {
+    window.location.href = `upi://pay?pa=${encodeURIComponent(upi)}&am=${amount}&cu=INR&tn=Match+spot`;
+  };
 
-  const match = data!.match;
-  const check = data!.check;
-  const summary = data!.summary;
+  // ─── Loading ───────────────────────────────────────────────────────────────
+  if (!data && !err) return (
+    <Page><Card>
+      <Spin />
+      <p style={S.meta}>Loading…</p>
+    </Card></Page>
+  );
 
-  const matchTitle = match?.title ?? data!.link.name ?? "Match Availability";
-  const venueLine  = match?.venue_name ?? check?.venue_hint ?? "";
-  const dateLine   = match
-    ? new Date(match.starts_at).toLocaleString("en-IN", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })
+  if (err) return (
+    <Page><Card>
+      <div style={{ fontSize: "3rem" }}>😕</div>
+      <h2 style={S.title}>Not found</h2>
+      <p style={S.meta}>{err}</p>
+    </Card></Page>
+  );
+
+  const match    = data!.match;
+  const check    = data!.check;
+  const summary  = data!.summary;
+  const price    = match?.price_per_player ?? 0;
+  const isPaid   = price > 0;
+  const captain  = match?.captain;
+  const upi      = captain?.upi_id;
+  const slots    = match?.squad_size ?? 0;
+  const yesCount = summary.yes;
+  const left     = slots > 0 ? Math.max(0, slots - yesCount) : null;
+
+  const title    = match?.title ?? data!.link.name ?? "Match";
+  const venue    = match?.venue_name ?? check?.venue_hint ?? "";
+  const dateStr  = match?.starts_at
+    ? new Date(match.starts_at).toLocaleString("en-IN", { weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" })
     : check?.match_date
-      ? new Date(check.match_date).toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long" }) + (check.match_time ? ` · ${check.match_time}` : "")
+      ? new Date(check.match_date + "T00:00:00").toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long" }) + (check.match_time ? ` · ${check.match_time}` : "")
       : "";
 
-  const price      = match?.price_per_player ?? 0;
-  const squadSize  = match?.squad_size ?? 0;
-  const confirmed  = data!.responses.filter((r) => r.response === "YES").length;
-  const slotsLeft  = squadSize > 0 ? Math.max(0, squadSize - confirmed) : null;
+  // ─── LANDING ───────────────────────────────────────────────────────────────
+  if (step === "landing") return (
+    <Page><Card>
+      <div style={{ fontSize: "2.5rem", marginBottom: "0.25rem" }}>🏏</div>
+      <h1 style={{ ...S.title, fontSize: "1.6rem" }}>{title}</h1>
+      {dateStr && <p style={{ ...S.meta, fontWeight: 700, color: "#222", marginTop: "0.5rem" }}>{dateStr}</p>}
+      {venue   && <p style={S.meta}>📍 {venue}</p>}
+      {check?.note && <p style={{ ...S.meta, fontStyle: "italic" }}>&ldquo;{check.note}&rdquo;</p>}
 
-  // ── STEP: LANDING ──
-  if (step === "landing") {
-    return (
-      <div style={styles.page}>
-        <div style={styles.card}>
-          <div style={{ fontSize: "2.5rem", marginBottom: "0.5rem" }}>🏏</div>
-          <h1 style={styles.title}>{matchTitle}</h1>
-          {dateLine && <p style={styles.meta}>{dateLine}</p>}
-          {venueLine && <p style={styles.meta}>📍 {venueLine}</p>}
-          {check?.note && (
-            <p style={{ ...styles.meta, fontStyle: "italic", marginTop: "0.25rem" }}>
-              &ldquo;{check.note}&rdquo;
-            </p>
-          )}
+      <div style={S.statsRow}>
+        {isPaid && <Stat num={`₹${price}`} label="PER PLAYER" color="#b45309" />}
+        <Stat num={String(yesCount)} label="YES" color="#16a34a" />
+        {left !== null && <Stat num={String(left)} label="SLOTS LEFT" color={left > 0 ? "#1a7a4d" : "#dc2626"} />}
+        {summary.maybe > 0 && <Stat num={String(summary.maybe)} label="MAYBE" color="#d97706" />}
+      </div>
 
-          {/* Stats row */}
-          <div style={styles.statsRow}>
-            <div style={styles.stat}>
-              <span style={styles.statNum}>{summary.yes}</span>
-              <span style={styles.statLabel}>YES</span>
-            </div>
-            {slotsLeft !== null && (
-              <div style={styles.stat}>
-                <span style={{ ...styles.statNum, color: slotsLeft > 0 ? "#16a34a" : "#ef4444" }}>
-                  {slotsLeft}
-                </span>
-                <span style={styles.statLabel}>SLOTS LEFT</span>
-              </div>
-            )}
-            {price > 0 && (
-              <div style={styles.stat}>
-                <span style={{ ...styles.statNum, color: "#d97706" }}>₹{price}</span>
-                <span style={styles.statLabel}>PER PLAYER</span>
-              </div>
-            )}
-            <div style={styles.stat}>
-              <span style={styles.statNum}>{summary.maybe}</span>
-              <span style={styles.statLabel}>MAYBE</span>
-            </div>
+      {left === 0
+        ? <div style={{ ...S.pill, background: "#fef2f2", color: "#dc2626", marginBottom: "1rem" }}>Squad is full</div>
+        : <button style={S.btnGreen} onClick={() => setStep("name")}>Can you play?</button>
+      }
+      <p style={{ fontSize: "0.72rem", color: "#bbb", marginTop: "0.75rem" }}>No account needed · 10 seconds</p>
+    </Card></Page>
+  );
+
+  // ─── NAME ──────────────────────────────────────────────────────────────────
+  if (step === "name") return (
+    <Page><Card>
+      <h2 style={S.title}>What&apos;s your name?</h2>
+      <p style={{ ...S.meta, marginBottom: "1.5rem" }}>So the captain knows who&apos;s responding</p>
+
+      <input autoFocus style={S.input} placeholder="Your name"
+        value={name} onChange={(e) => setName(e.target.value)}
+        onKeyDown={(e) => { if (e.key === "Enter" && name.trim()) void (async () => { await handleYes(); })(); }} />
+      <input style={{ ...S.input, marginTop: "0.75rem" }} placeholder="Phone (optional)" type="tel" inputMode="tel"
+        value={phone} onChange={(e) => setPhone(e.target.value)} />
+
+      <div style={{ display: "grid", gap: "0.6rem", marginTop: "1.25rem", width: "100%" }}>
+        <button style={{ ...S.btnGreen, opacity: name.trim() ? 1 : 0.4 }}
+          disabled={!name.trim() || saving} onClick={() => void handleYes()}>
+          {saving ? "Saving…" : isPaid ? `✅  I'm In — Pay ₹${price}` : "✅  I'm In"}
+        </button>
+        <button style={{ ...S.btnAmber }}
+          disabled={saving} onClick={() => void handleMaybe()}>
+          🤔  Maybe
+        </button>
+        <button style={{ ...S.btnRed }}
+          disabled={saving} onClick={() => void handleNo()}>
+          ❌  Can't Make It
+        </button>
+      </div>
+      <button style={S.btnBack} onClick={() => setStep("landing")}>← Back</button>
+    </Card></Page>
+  );
+
+  // ─── PAYMENT NOW (mandatory after YES) ────────────────────────────────────
+  if (step === "payment_now") return (
+    <Page><Card>
+      <div style={{ fontSize: "2rem", marginBottom: "0.5rem" }}>💰</div>
+      <h2 style={{ ...S.title, fontSize: "1.4rem" }}>Confirm your spot</h2>
+      <p style={{ ...S.meta, marginBottom: "1.5rem" }}>Pay to lock your place in the squad</p>
+
+      {/* Amount badge */}
+      <div style={{ background: "#f0fdf4", border: "2px solid #86efac", borderRadius: "16px", padding: "1rem 1.5rem", textAlign: "center", marginBottom: "1.5rem", width: "100%" }}>
+        <div style={{ fontSize: "2.2rem", fontWeight: 900, color: "#16a34a" }}>₹{price}</div>
+        <div style={{ fontSize: "0.78rem", color: "#666", marginTop: "0.25rem" }}>Match fee</div>
+      </div>
+
+      {/* Captain UPI details */}
+      {upi ? (
+        <div style={{ background: "#fff7ed", border: "1.5px solid #fed7aa", borderRadius: "12px", padding: "1rem", width: "100%", marginBottom: "1.5rem" }}>
+          <p style={{ margin: "0 0 0.5rem", fontSize: "0.78rem", color: "#9a3412", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+            Pay to captain
+          </p>
+          <p style={{ margin: "0 0 0.15rem", fontWeight: 700, fontSize: "1rem", color: "#111" }}>
+            {captain?.upi_name ?? captain?.display_name ?? captain?.full_name ?? "Captain"}
+          </p>
+          <p style={{ margin: 0, fontFamily: "monospace", fontSize: "1rem", color: "#b45309", letterSpacing: "0.03em" }}>{upi}</p>
+          <div style={{ display: "flex", gap: "0.6rem", marginTop: "1rem" }}>
+            <button style={{ flex: 1, padding: "0.65rem", borderRadius: "8px", border: "1.5px solid #fb923c", background: "#fff", color: "#ea580c", fontWeight: 700, fontSize: "0.85rem", cursor: "pointer" }}
+              onClick={() => void copyUpi(upi)}>
+              {upiCopied ? "✓ Copied!" : "Copy UPI"}
+            </button>
+            <button style={{ flex: 1, padding: "0.65rem", borderRadius: "8px", border: "none", background: "#ea580c", color: "#fff", fontWeight: 700, fontSize: "0.85rem", cursor: "pointer" }}
+              onClick={() => openUpiApp(upi, price)}>
+              Open UPI App
+            </button>
           </div>
-
-          <button style={{ ...styles.btnPrimary, marginBottom: "0.75rem" }} onClick={() => setStep("name")}>
-            Can you play?
-          </button>
-          <p style={{ fontSize: "0.75rem", color: "#aaa", margin: 0 }}>No account needed · Takes 10 seconds</p>
         </div>
-      </div>
-    );
-  }
-
-  // ── STEP: NAME ──
-  if (step === "name") {
-    return (
-      <div style={styles.page}>
-        <div style={styles.card}>
-          <h2 style={styles.title}>What&apos;s your name?</h2>
-          <p style={{ color: "#888", fontSize: "0.9rem", marginBottom: "1.5rem" }}>
-            So the captain knows who responded
+      ) : (
+        <div style={{ background: "#fafafa", border: "1.5px dashed #d4d4d8", borderRadius: "12px", padding: "1rem", width: "100%", marginBottom: "1.5rem", textAlign: "center" }}>
+          <p style={{ margin: 0, fontSize: "0.9rem", color: "#888" }}>Contact the captain for UPI details</p>
+          <p style={{ margin: "0.25rem 0 0", fontSize: "0.85rem", fontWeight: 700, color: "#555" }}>
+            Join code: <span style={{ fontFamily: "monospace", color: "#1a7a4d" }}>{match?.join_code}</span>
           </p>
-          <input
-            autoFocus
-            style={styles.input}
-            placeholder="Your name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter" && name.trim()) setStep("response"); }}
-          />
-          <input
-            style={{ ...styles.input, marginTop: "0.75rem" }}
-            placeholder="Phone number (optional)"
-            type="tel"
-            inputMode="tel"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter" && name.trim()) setStep("response"); }}
-          />
-          <button
-            style={{ ...styles.btnPrimary, marginTop: "1.25rem", opacity: name.trim() ? 1 : 0.5 }}
-            disabled={!name.trim()}
-            onClick={() => setStep("response")}
-          >
-            Continue →
-          </button>
-          <button style={styles.btnGhost} onClick={() => setStep("landing")}>← Back</button>
         </div>
+      )}
+
+      {/* I have paid */}
+      <button style={S.btnGreen} disabled={saving} onClick={() => void handleClaimPaid()}>
+        {saving ? "Saving…" : "✅  I Have Paid"}
+      </button>
+      <p style={{ fontSize: "0.75rem", color: "#aaa", marginTop: "0.75rem" }}>
+        Captain will verify and confirm your spot
+      </p>
+    </Card></Page>
+  );
+
+  // ─── CLAIMED — waiting for captain ────────────────────────────────────────
+  if (step === "claimed") return (
+    <Page><Card>
+      <div style={{ fontSize: "3rem", marginBottom: "0.5rem" }}>⏳</div>
+      <h2 style={S.title}>Waiting for confirmation</h2>
+      <p style={{ ...S.meta, marginBottom: "1.5rem", lineHeight: 1.6 }}>
+        Your payment is noted. The captain will verify and confirm your spot shortly.
+      </p>
+      <div style={{ ...S.pill, background: "#fef3c7", color: "#92400e" }}>📩 Payment claimed · Pending captain</div>
+      <div style={S.statsRow}>
+        <Stat num={String(yesCount + 1)} label="YES" color="#16a34a" />
+        {left !== null && <Stat num={String(Math.max(0, left - 1))} label="SLOTS LEFT" color="#1a7a4d" />}
       </div>
-    );
-  }
+      <p style={{ fontSize: "0.72rem", color: "#bbb" }}>You can close this page</p>
+    </Card></Page>
+  );
 
-  // ── STEP: RESPONSE ──
-  if (step === "response") {
-    return (
-      <div style={styles.page}>
-        <div style={styles.card}>
-          <h2 style={styles.title}>Can you play?</h2>
-          <p style={{ color: "#888", fontSize: "0.9rem", marginBottom: "2rem" }}>
-            {dateLine && <><strong style={{ color: "#111" }}>{dateLine}</strong><br /></>}
-            {venueLine}
-          </p>
-
-          <button style={{ ...styles.btnBig, background: "#16a34a" }}
-            disabled={submitting} onClick={() => void submit("YES")}>
-            {submitting ? "…" : "✅  I&apos;m In"}
-          </button>
-          <button style={{ ...styles.btnBig, background: "#d97706", marginTop: "0.75rem" }}
-            disabled={submitting} onClick={() => void submit("MAYBE")}>
-            🤔  Maybe
-          </button>
-          <button style={{ ...styles.btnBig, background: "#dc2626", marginTop: "0.75rem" }}
-            disabled={submitting} onClick={() => void submit("NO")}>
-            ❌  Can&apos;t Make It
-          </button>
-
-          <button style={{ ...styles.btnGhost, marginTop: "1rem" }} onClick={() => setStep("name")}>← Back</button>
-        </div>
+  // ─── NO / MAYBE done ───────────────────────────────────────────────────────
+  if (step === "no_done") return (
+    <Page><Card>
+      <div style={{ fontSize: "3rem", marginBottom: "0.5rem" }}>👋</div>
+      <h2 style={S.title}>No worries!</h2>
+      <p style={{ ...S.meta, lineHeight: 1.6 }}>Thanks for letting the captain know. Maybe next time!</p>
+      <div style={S.statsRow}>
+        <Stat num={String(yesCount)} label="YES" color="#16a34a" />
+        <Stat num={String(summary.no + 1)} label="NO" color="#dc2626" />
       </div>
-    );
-  }
+    </Card></Page>
+  );
 
-  // ── STEP: PAYMENT ──
-  if (step === "payment" && match) {
-    return (
-      <div style={styles.page}>
-        <div style={styles.card}>
-          <div style={{ fontSize: "2rem", marginBottom: "0.5rem" }}>💰</div>
-          <h2 style={styles.title}>Pay ₹{price} to confirm</h2>
-          <p style={{ color: "#888", fontSize: "0.9rem", marginBottom: "1.5rem" }}>
-            Pay the captain via UPI to lock your spot
-          </p>
-
-          {/* UPI box — captain configures this separately; for now show join code */}
-          <div style={{
-            background: "#f0fdf4", border: "2px dashed #16a34a", borderRadius: "12px",
-            padding: "1.25rem", textAlign: "center", marginBottom: "1.5rem",
-          }}>
-            <p style={{ margin: "0 0 0.5rem", fontSize: "0.85rem", color: "#555" }}>Share this with captain for reference</p>
-            <strong style={{ fontSize: "1.1rem", letterSpacing: "0.1em", color: "#16a34a" }}>
-              {match.join_code}
-            </strong>
-            <p style={{ margin: "0.5rem 0 0", fontSize: "0.78rem", color: "#888" }}>Match join code</p>
-          </div>
-
-          <button style={{ ...styles.btnPrimary, marginBottom: "0.75rem" }}
-            disabled={submitting} onClick={() => void claimPayment()}>
-            {submitting ? "Saving…" : "✅  I Have Paid"}
-          </button>
-
-          <button style={{ ...styles.btnGhost }} onClick={() => setStep("done")}>
-            Skip for now
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // ── STEP: DONE ──
   return (
-    <div style={styles.page}>
-      <div style={styles.card}>
-        <div style={{ fontSize: "3rem", marginBottom: "0.75rem" }}>
-          {response === "YES" ? "🎉" : response === "MAYBE" ? "🤔" : "👋"}
-        </div>
-        <h2 style={styles.title}>
-          {response === "YES"
-            ? paymentClaimed ? "All done!" : "You&apos;re in!"
-            : response === "MAYBE" ? "Got it!" : "No worries!"}
-        </h2>
-        <p style={{ color: "#888", fontSize: "0.9rem", lineHeight: 1.6, marginBottom: "1.5rem" }}>
-          {response === "YES"
-            ? paymentClaimed
-              ? "Captain will confirm your payment. See you on the field!"
-              : "Your response is saved. Pay the captain to lock your spot."
-            : response === "MAYBE"
-              ? "Captain will keep a slot open for you."
-              : "Thanks for letting us know. Maybe next time!"}
-        </p>
-
-        {/* Show current responses */}
-        <div style={styles.statsRow}>
-          <div style={styles.stat}>
-            <span style={{ ...styles.statNum, color: "#16a34a" }}>{summary.yes + (response === "YES" ? 1 : 0)}</span>
-            <span style={styles.statLabel}>YES</span>
-          </div>
-          <div style={styles.stat}>
-            <span style={{ ...styles.statNum, color: "#d97706" }}>{summary.maybe + (response === "MAYBE" ? 1 : 0)}</span>
-            <span style={styles.statLabel}>MAYBE</span>
-          </div>
-          <div style={styles.stat}>
-            <span style={{ ...styles.statNum, color: "#dc2626" }}>{summary.no + (response === "NO" ? 1 : 0)}</span>
-            <span style={styles.statLabel}>NO</span>
-          </div>
-        </div>
-
-        <p style={{ fontSize: "0.75rem", color: "#bbb", marginTop: "1rem" }}>
-          You can close this page
-        </p>
+    <Page><Card>
+      <div style={{ fontSize: "3rem", marginBottom: "0.5rem" }}>🤔</div>
+      <h2 style={S.title}>Got it!</h2>
+      <p style={{ ...S.meta, lineHeight: 1.6 }}>Captain will keep a slot open if available.</p>
+      <div style={S.statsRow}>
+        <Stat num={String(yesCount)} label="YES" color="#16a34a" />
+        <Stat num={String(summary.maybe + 1)} label="MAYBE" color="#d97706" />
       </div>
-    </div>
+    </Card></Page>
   );
 }
 
-// ── Minimal inline styles — no CSS dependency, works on any device ────────────
-const styles = {
-  page: {
-    minHeight: "100dvh",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: "1rem",
-    background: "linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 100%)",
-    fontFamily: "'DM Sans', -apple-system, sans-serif",
-  } as React.CSSProperties,
-  card: {
-    background: "#fff",
-    borderRadius: "24px",
-    boxShadow: "0 8px 40px rgba(0,0,0,0.12)",
-    padding: "2rem 1.5rem",
-    width: "min(100%, 380px)",
-    textAlign: "center",
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-  } as React.CSSProperties,
-  title: {
-    margin: "0 0 0.5rem",
-    fontSize: "1.5rem",
-    fontWeight: 800,
-    color: "#111",
-    lineHeight: 1.2,
-  } as React.CSSProperties,
-  meta: {
-    margin: "0.15rem 0",
-    fontSize: "0.9rem",
-    color: "#555",
-  } as React.CSSProperties,
-  statsRow: {
-    display: "flex",
-    gap: "1rem",
-    justifyContent: "center",
-    margin: "1.5rem 0",
-    width: "100%",
-  } as React.CSSProperties,
-  stat: {
-    display: "flex",
-    flexDirection: "column",
-    alignItems: "center",
-    gap: "0.2rem",
-  } as React.CSSProperties,
-  statNum: {
-    fontSize: "1.8rem",
-    fontWeight: 900,
-    color: "#111",
-    lineHeight: 1,
-  } as React.CSSProperties,
-  statLabel: {
-    fontSize: "0.65rem",
-    fontWeight: 700,
-    color: "#aaa",
-    letterSpacing: "0.08em",
-  } as React.CSSProperties,
-  input: {
-    width: "100%",
-    padding: "0.9rem 1rem",
-    borderRadius: "12px",
-    border: "1.5px solid #e4e4e7",
-    fontSize: "1rem",
-    outline: "none",
-    boxSizing: "border-box" as const,
-    textAlign: "left" as const,
-  } as React.CSSProperties,
-  btnPrimary: {
-    width: "100%",
-    padding: "1rem",
-    borderRadius: "999px",
-    border: "none",
-    background: "#1a7a4d",
-    color: "#fff",
-    fontWeight: 800,
-    fontSize: "1rem",
-    cursor: "pointer",
-    transition: "opacity 150ms",
-  } as React.CSSProperties,
-  btnBig: {
-    width: "100%",
-    padding: "1.1rem",
-    borderRadius: "16px",
-    border: "none",
-    color: "#fff",
-    fontWeight: 800,
-    fontSize: "1.05rem",
-    cursor: "pointer",
-    transition: "opacity 150ms",
-  } as React.CSSProperties,
-  btnGhost: {
-    background: "none",
-    border: "none",
-    cursor: "pointer",
-    color: "#888",
-    fontSize: "0.88rem",
-    padding: "0.5rem",
-    marginTop: "0.25rem",
-  } as React.CSSProperties,
-  spinner: {
-    width: "2.5rem",
-    height: "2.5rem",
-    border: "3px solid #e4e4e7",
-    borderTopColor: "#1a7a4d",
-    borderRadius: "999px",
-    animation: "spin 0.75s linear infinite",
-  } as React.CSSProperties,
+// ─── Sub-components ──────────────────────────────────────────────────────────
+function Page({ children }: { children: React.ReactNode }) {
+  return (
+    <div style={{ minHeight: "100dvh", display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem", background: "linear-gradient(160deg,#f0fdf4,#ecfdf5 60%,#fff)" }}>
+      {children}
+    </div>
+  );
+}
+function Card({ children }: { children: React.ReactNode }) {
+  return (
+    <div style={{ background: "#fff", borderRadius: "24px", boxShadow: "0 8px 48px rgba(0,0,0,0.10)", padding: "2rem 1.5rem", width: "min(100%,390px)", textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: "0.1rem" }}>
+      {children}
+    </div>
+  );
+}
+function Stat({ num, label, color }: { num: string; label: string; color?: string }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "0.15rem" }}>
+      <span style={{ fontSize: "2rem", fontWeight: 900, color: color ?? "#111", lineHeight: 1 }}>{num}</span>
+      <span style={{ fontSize: "0.62rem", fontWeight: 700, color: "#aaa", letterSpacing: "0.08em" }}>{label}</span>
+    </div>
+  );
+}
+function Spin() {
+  return <div style={{ width: "2rem", height: "2rem", border: "3px solid #e4e4e7", borderTopColor: "#1a7a4d", borderRadius: "999px", animation: "spin 0.7s linear infinite" }} />;
+}
+
+// ─── Styles ──────────────────────────────────────────────────────────────────
+const S = {
+  title:    { margin: "0.25rem 0 0.25rem", fontSize: "1.5rem", fontWeight: 800, color: "#111", lineHeight: 1.2 } as React.CSSProperties,
+  meta:     { margin: "0.1rem 0", fontSize: "0.9rem", color: "#555" } as React.CSSProperties,
+  statsRow: { display: "flex", gap: "1.5rem", justifyContent: "center", margin: "1.25rem 0", width: "100%" } as React.CSSProperties,
+  pill:     { borderRadius: "999px", padding: "0.4rem 1rem", fontSize: "0.82rem", fontWeight: 700, marginBottom: "0.5rem" } as React.CSSProperties,
+  input:    { width: "100%", padding: "0.9rem 1rem", borderRadius: "12px", border: "1.5px solid #e4e4e7", fontSize: "1rem", outline: "none", boxSizing: "border-box" as const, background: "#fafafa" } as React.CSSProperties,
+  btnGreen: { width: "100%", padding: "1rem", borderRadius: "999px", border: "none", background: "#16a34a", color: "#fff", fontWeight: 800, fontSize: "1rem", cursor: "pointer", transition: "opacity 150ms" } as React.CSSProperties,
+  btnAmber: { width: "100%", padding: "0.9rem", borderRadius: "999px", border: "none", background: "#d97706", color: "#fff", fontWeight: 800, fontSize: "0.95rem", cursor: "pointer" } as React.CSSProperties,
+  btnRed:   { width: "100%", padding: "0.9rem", borderRadius: "999px", border: "none", background: "#dc2626", color: "#fff", fontWeight: 800, fontSize: "0.95rem", cursor: "pointer" } as React.CSSProperties,
+  btnBack:  { background: "none", border: "none", cursor: "pointer", color: "#aaa", fontSize: "0.85rem", padding: "0.5rem", marginTop: "0.25rem" } as React.CSSProperties,
 };
