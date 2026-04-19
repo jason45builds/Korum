@@ -24,23 +24,27 @@ type PendingItem = {
 };
 
 const RESP_OPTS = [
-  { value: "AVAILABLE",   label: "I'm in ✅",    bg: "var(--success)",       color: "#fff" },
-  { value: "MAYBE",       label: "Maybe 🤔",      bg: "var(--warning)",       color: "#fff" },
-  { value: "UNAVAILABLE", label: "Can't make it ❌", bg: "var(--danger)",    color: "#fff" },
+  { value: "AVAILABLE",   label: "I&apos;m in ✅",       bg: "var(--success)", color: "#fff" },
+  { value: "MAYBE",       label: "Maybe 🤔",              bg: "var(--warning)", color: "#fff" },
+  { value: "UNAVAILABLE", label: "Can&apos;t make it ❌", bg: "var(--danger)",  color: "#fff" },
 ] as const;
+
+const RESP_LABELS: Record<string, string> = {
+  AVAILABLE:   "I'm in ✅",
+  MAYBE:       "Maybe 🤔",
+  UNAVAILABLE: "Can't make it ❌",
+};
 
 export default function PlayerAvailabilityPage() {
   const { isAuthenticated, loading: authLoading } = useAuth();
-  const [pending, setPending]     = useState<PendingItem[]>([]);
-  const [loading, setLoading]     = useState(false);
+  const [pending, setPending]       = useState<PendingItem[]>([]);
+  const [loading, setLoading]       = useState(false);
   const [responding, setResponding] = useState<string | null>(null);
-  const [notes, setNotes]         = useState<Record<string, string>>({});
-  const [done, setDone]           = useState<Set<string>>(new Set());
+  const [notes, setNotes]           = useState<Record<string, string>>({});
+  const [done, setDone]             = useState<Record<string, string>>({});
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => {
-    if (isAuthenticated) void load();
-  }, [isAuthenticated]);
+  useEffect(() => { if (isAuthenticated) void load(); }, [isAuthenticated]);
 
   const load = async () => {
     setLoading(true);
@@ -48,26 +52,18 @@ export default function PlayerAvailabilityPage() {
       const res  = await fetch("/api/availability-check", { credentials: "same-origin" });
       const data = await res.json() as { pending: PendingItem[] };
       setPending(data.pending ?? []);
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   };
 
   const respond = async (checkId: string, response: string) => {
     setResponding(checkId + response);
     try {
       await fetch("/api/availability-check", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        credentials: "same-origin",
+        method: "PATCH", headers: { "Content-Type": "application/json" }, credentials: "same-origin",
         body: JSON.stringify({ checkId, response, note: notes[checkId] || null }),
       });
-      setDone((d) => new Set([...d, checkId]));
-    } catch {
-      // ignore
-    } finally {
-      setResponding(null);
-    }
+      setDone((d) => ({ ...d, [checkId]: response }));
+    } catch { /* ignore */ } finally { setResponding(null); }
   };
 
   if (!authLoading && !isAuthenticated) {
@@ -75,8 +71,8 @@ export default function PlayerAvailabilityPage() {
   }
   if (authLoading || loading) return <main><Loader label="Loading your availability requests…" /></main>;
 
-  const unanswered = pending.filter((p) => !done.has(p.availability_checks.id));
-  const answered   = pending.filter((p) =>  done.has(p.availability_checks.id));
+  const unanswered = pending.filter((p) => !done[p.availability_checks.id]);
+  const answered   = pending.filter((p) =>  done[p.availability_checks.id]);
 
   return (
     <main>
@@ -85,7 +81,7 @@ export default function PlayerAvailabilityPage() {
           <p className="eyebrow">My Availability</p>
           <h1 className="title-lg" style={{ marginTop: "0.3rem" }}>Are you free?</h1>
           <p className="muted" style={{ marginTop: "0.3rem", fontSize: "0.9rem" }}>
-            Your captains are waiting to know if you're available. Tap once to respond.
+            Your captains are waiting to know if you&apos;re available. Tap once to respond.
           </p>
         </section>
 
@@ -103,17 +99,14 @@ export default function PlayerAvailabilityPage() {
           <section style={{ display: "grid", gap: "0.75rem" }}>
             <p className="eyebrow">{unanswered.length} pending</p>
             {unanswered.map((item) => {
-              const chk = item.availability_checks;
+              const chk       = item.availability_checks;
               const isExpired = new Date(chk.expires_at) < new Date();
               return (
                 <div key={item.id} className="panel animate-in" style={{ display: "grid", gap: "1rem" }}>
-                  {/* Match info */}
                   <div>
                     <div className="row-between">
                       <strong style={{ fontFamily: "var(--font-display)", fontSize: "1.05rem" }}>
-                        {new Date(chk.match_date).toLocaleDateString("en-IN", {
-                          weekday: "long", day: "numeric", month: "long",
-                        })}
+                        {new Date(chk.match_date).toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long" })}
                         {chk.match_time ? ` · ${chk.match_time}` : ""}
                       </strong>
                       {isExpired && <span className="badge badge-danger">Expired</span>}
@@ -125,47 +118,44 @@ export default function PlayerAvailabilityPage() {
                     )}
                     {chk.note && (
                       <p className="muted" style={{ fontSize: "0.85rem", marginTop: "0.25rem", fontStyle: "italic" }}>
-                        "{chk.note}"
+                        &ldquo;{chk.note}&rdquo;
                       </p>
                     )}
                   </div>
 
-                  {/* Optional note */}
-                  <input
-                    className="input"
-                    placeholder="Add a note (optional)"
+                  <input className="input" placeholder="Add a note (optional)"
                     value={notes[chk.id] ?? ""}
                     onChange={(e) => setNotes((n) => ({ ...n, [chk.id]: e.target.value }))}
-                    style={{ fontSize: "0.88rem" }}
-                  />
+                    style={{ fontSize: "0.88rem" }} />
 
-                  {/* Response buttons */}
                   <div className="grid grid-3" style={{ gap: "0.5rem" }}>
-                    {RESP_OPTS.map((opt) => (
-                      <button
-                        key={opt.value}
-                        disabled={!!responding || isExpired}
-                        onClick={() => void respond(chk.id, opt.value)}
-                        style={{
-                          padding: "0.75rem 0.5rem",
-                          border: "none",
-                          borderRadius: "var(--radius-sm)",
-                          background: responding === chk.id + opt.value ? opt.bg : "var(--surface-muted)",
-                          color: responding === chk.id + opt.value ? opt.color : "var(--text)",
-                          fontFamily: "var(--font-display)",
-                          fontWeight: 700,
-                          fontSize: "0.82rem",
-                          cursor: isExpired ? "not-allowed" : "pointer",
-                          opacity: isExpired ? 0.5 : 1,
-                          transition: "all 150ms ease",
-                          textAlign: "center",
-                        }}
-                        onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = opt.bg; (e.currentTarget as HTMLButtonElement).style.color = opt.color; }}
-                        onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = "var(--surface-muted)"; (e.currentTarget as HTMLButtonElement).style.color = "var(--text)"; }}
-                      >
-                        {responding === chk.id + opt.value ? "Saving…" : opt.label}
-                      </button>
-                    ))}
+                    {(["AVAILABLE", "MAYBE", "UNAVAILABLE"] as const).map((val) => {
+                      const labels: Record<string, string> = {
+                        AVAILABLE:   "I'm in ✅",
+                        MAYBE:       "Maybe 🤔",
+                        UNAVAILABLE: "Can't make it ❌",
+                      };
+                      const colours: Record<string, { bg: string }> = {
+                        AVAILABLE:   { bg: "var(--success)" },
+                        MAYBE:       { bg: "var(--warning)" },
+                        UNAVAILABLE: { bg: "var(--danger)"  },
+                      };
+                      const isActive = responding === chk.id + val;
+                      return (
+                        <button key={val} disabled={!!responding || isExpired}
+                          onClick={() => void respond(chk.id, val)}
+                          style={{
+                            padding: "0.75rem 0.5rem", border: "1.5px solid var(--line)",
+                            borderRadius: "var(--radius-sm)", cursor: isExpired ? "not-allowed" : "pointer",
+                            fontFamily: "var(--font-display)", fontWeight: 700, fontSize: "0.82rem",
+                            opacity: isExpired ? 0.5 : 1, textAlign: "center", transition: "all 150ms ease",
+                            background: isActive ? colours[val].bg : "var(--surface)",
+                            color: isActive ? "#fff" : "var(--text)",
+                          }}>
+                          {isActive ? "Saving…" : labels[val]}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               );
@@ -179,14 +169,20 @@ export default function PlayerAvailabilityPage() {
             {answered.map((item) => {
               const chk = item.availability_checks;
               return (
-                <div key={item.id} className="panel" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "1rem" }}>
+                <div key={item.id} className="panel"
+                  style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "1rem" }}>
                   <div>
                     <strong style={{ fontSize: "0.95rem" }}>
                       {new Date(chk.match_date).toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" })}
                     </strong>
                     {chk.venue_hint && <div className="faint" style={{ fontSize: "0.8rem" }}>{chk.venue_hint}</div>}
                   </div>
-                  <span className="badge badge-success">Responded ✓</span>
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "0.25rem" }}>
+                    <span className="badge badge-success">Responded ✓</span>
+                    <span className="faint" style={{ fontSize: "0.75rem" }}>
+                      {RESP_LABELS[done[chk.id]] ?? done[chk.id]}
+                    </span>
+                  </div>
                 </div>
               );
             })}
