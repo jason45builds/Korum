@@ -14,8 +14,9 @@ type UserStore = {
 export const useUserStore = create<UserStore>((set) => ({
   profile: null,
   isAuthenticated: false,
-  // Start as false — useAuth will set it true only while actively checking
-  loading: false,
+  // Start as true so guarded pages don't render the signed-out state
+  // before the first Supabase session check completes.
+  loading: true,
   setLoading: (loading) => set({ loading }),
   setAuthenticated: (isAuthenticated) => set({ isAuthenticated }),
   setProfile: (profile) => set({ profile }),

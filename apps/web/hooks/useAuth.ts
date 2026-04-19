@@ -30,6 +30,7 @@ export const useAuth = () => {
   useEffect(() => {
     if (initialised.current) return;
     initialised.current = true;
+    setLoading(true);
 
     // Absolute fallback — never stay loading more than 6 seconds
     const timeout = setTimeout(() => {

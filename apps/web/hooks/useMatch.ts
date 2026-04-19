@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { toErrorMessage } from "@/lib/helpers";
 import {
@@ -39,7 +39,7 @@ export const useMatch = (matchId?: string | null) => {
     setLoading,
   } = useMatchStore();
 
-  const loadMatch = async (params: { matchId?: string; joinCode?: string }) => {
+  const loadMatch = useCallback(async (params: { matchId?: string; joinCode?: string }) => {
     setLoading(true);
 
     try {
@@ -53,9 +53,9 @@ export const useMatch = (matchId?: string | null) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [setActiveMatch, setError, setLoading]);
 
-  const loadDashboard = async () => {
+  const loadDashboard = useCallback(async () => {
     setLoading(true);
 
     try {
@@ -70,27 +70,29 @@ export const useMatch = (matchId?: string | null) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [setDashboardMatches, setError, setLoading]);
 
-  const loadTeamMatches = async (teamId: string) => {
+  const loadTeamMatches = useCallback(async (teamId: string) => {
     const response = await getTeamMatches(teamId);
     return response.matches;
-  };
+  }, []);
+
+  const handleRealtimeChange = useCallback(() => {
+    if (matchId) {
+      void loadMatch({ matchId });
+    }
+  }, [loadMatch, matchId]);
 
   useRealtime({
     matchId,
-    onChange: () => {
-      if (matchId) {
-        void loadMatch({ matchId });
-      }
-    },
+    onChange: handleRealtimeChange,
   });
 
   useEffect(() => {
     if (matchId) {
       void loadMatch({ matchId }).catch(() => undefined);
     }
-  }, [matchId]);
+  }, [loadMatch, matchId]);
 
   return {
     activeMatch,
