@@ -30,16 +30,17 @@ export const useAuth = () => {
   useEffect(() => {
     if (initialised.current) return;
     initialised.current = true;
+
+    // Set loading true now that we are actively checking
     setLoading(true);
 
-    // Absolute fallback — never stay loading more than 6 seconds
+    // Absolute fallback — never stay loading more than 8 seconds
     const timeout = setTimeout(() => {
       setLoading(false);
-    }, 6000);
+    }, 8000);
 
     const run = async () => {
       try {
-        // Dynamically import to avoid crashing at module load time
         const { getSupabaseBrowserClient } = await import("@/services/supabase/client");
         const client = getSupabaseBrowserClient();
 
@@ -58,7 +59,6 @@ export const useAuth = () => {
           await refreshProfile();
         } catch (profileErr) {
           setError(toErrorMessage(profileErr));
-          // Still authenticated even if profile fetch fails
         }
       } catch (err) {
         const msg = toErrorMessage(err);
@@ -73,26 +73,22 @@ export const useAuth = () => {
 
     void run();
 
-    // Set up auth state listener (best effort)
+    // Auth state listener — best effort
     let unsubscribe: (() => void) | null = null;
 
-    void (async () => {
+    void import("@/services/supabase/client").then(({ getSupabaseBrowserClient }) => {
       try {
-        const { getSupabaseBrowserClient } = await import("@/services/supabase/client");
         const client = getSupabaseBrowserClient();
         const { data: { subscription } } = client.auth.onAuthStateChange((_event, session) => {
-          if (!session?.user) {
-            reset();
-            return;
-          }
+          if (!session?.user) { reset(); return; }
           setAuthenticated(true);
           void refreshProfile().catch((err) => setError(toErrorMessage(err)));
         });
         unsubscribe = () => subscription.unsubscribe();
       } catch {
-        // ignore — auth state listener is best-effort
+        // ignore
       }
-    })();
+    }).catch(() => {});
 
     return () => {
       clearTimeout(timeout);

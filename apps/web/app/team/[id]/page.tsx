@@ -22,9 +22,10 @@ export default function TeamPage() {
   const { loadTeamMatches } = useMatch();
   const [team, setTeam] = useState<TeamDetails | null>(null);
   const [matches, setMatches] = useState<MatchSummary[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!isAuthenticated) return;
 
@@ -46,7 +47,7 @@ export default function TeamPage() {
     };
 
     void load();
-  }, [isAuthenticated, loadTeamMatches, params.id]);
+  }, [isAuthenticated, params.id]); // omit loadTeamMatches — stable but causes loop
 
   if (!authLoading && !isAuthenticated) {
     return (

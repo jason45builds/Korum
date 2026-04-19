@@ -31,13 +31,14 @@ export default function DashboardPage() {
     setTeams(response.teams);
   };
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (isAuthenticated) {
       void Promise.all([loadDashboard(), loadTeams()]).catch(() =>
         setCreateMsg({ text: "Could not load dashboard.", error: true }),
       );
     }
-  }, [isAuthenticated, loadDashboard]);
+  }, [isAuthenticated]); // intentionally omit loadDashboard — it's stable via useCallback but causes loop if included
 
   // Auth resolved as unauthenticated — show sign in immediately
   if (!authLoading && !isAuthenticated) {

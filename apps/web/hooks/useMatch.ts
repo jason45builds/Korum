@@ -92,7 +92,8 @@ export const useMatch = (matchId?: string | null) => {
     if (matchId) {
       void loadMatch({ matchId }).catch(() => undefined);
     }
-  }, [loadMatch, matchId]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [matchId]); // omit loadMatch from deps — stable ref but causes loop with Zustand setters
 
   return {
     activeMatch,

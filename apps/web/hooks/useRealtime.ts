@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-
-import { getSupabaseBrowserClient } from "@/services/supabase/client";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 type UseRealtimeOptions = {
   matchId?: string | null;
@@ -17,12 +16,22 @@ export const useRealtime = ({ matchId, onChange }: UseRealtimeOptions) => {
   );
 
   useEffect(() => {
-    if (!matchId) {
-      return undefined;
+    if (!matchId) return;
+
+    let supabase: SupabaseClient | null = null;
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const mod = require("@/services/supabase/client") as { getSupabaseBrowserClient: () => SupabaseClient };
+      supabase = mod.getSupabaseBrowserClient();
+    } catch {
+      // Env vars missing — realtime disabled, not a fatal error
+      return;
     }
 
-    const supabase = getSupabaseBrowserClient();
-    const channel = supabase
+    if (!supabase) return;
+
+    const client = supabase;
+    const channel = client
       .channel(channelName)
       .on(
         "postgres_changes",
@@ -69,7 +78,7 @@ export const useRealtime = ({ matchId, onChange }: UseRealtimeOptions) => {
       });
 
     return () => {
-      void supabase.removeChannel(channel);
+      void client.removeChannel(channel);
       setConnected(false);
     };
   }, [channelName, matchId, onChange]);
