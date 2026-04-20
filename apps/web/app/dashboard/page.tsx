@@ -13,45 +13,48 @@ import { getMyTeams } from "@/services/api/team";
 import type { MatchSummary } from "@korum/types/match";
 import type { TeamDetails } from "@korum/types/team";
 
-type PendingAvailability = {
+type PendingAv = {
   id: string;
-  check_id: string;
   availability_checks: {
     id: string; match_date: string; match_time: string | null;
-    venue_hint: string | null; note: string | null; expires_at: string;
+    venue_hint: string | null; expires_at: string;
   };
 };
+
+function fmtShort(s: string) {
+  if (!s) return "";
+  try { return new Date(s).toLocaleString("en-IN", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }); }
+  catch { return s; }
+}
 
 export default function HomePage() {
   const { profile, isAuthenticated, loading: authLoading, signOut } = useAuth();
   const { dashboardMatches, pendingPayments, loading: matchLoading, loadDashboard } = useMatch();
-  const [teams, setTeams]     = useState<TeamDetails[]>([]);
-  const [pendingAv, setPendingAv] = useState<PendingAvailability[]>([]);
+  const [teams, setTeams]       = useState<TeamDetails[]>([]);
+  const [pendingAv, setPendingAv] = useState<PendingAv[]>([]);
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!isAuthenticated) return;
     void loadDashboard();
-    void getMyTeams().then((r) => setTeams(r.teams)).catch(() => {});
+    void getMyTeams().then(r => setTeams(r.teams)).catch(() => {});
     void fetch("/api/availability-check", { credentials: "same-origin" })
-      .then((r) => r.json())
-      .then((d: { pending?: PendingAvailability[] }) => setPendingAv(d.pending ?? []))
+      .then(r => r.json())
+      .then((d: { pending?: PendingAv[] }) => setPendingAv(d.pending ?? []))
       .catch(() => {});
   }, [isAuthenticated]);
 
-  // ── Not signed in ─────────────────────────────────────────────────────────
+  // ── Landing (not signed in) ────────────────────────────────────────────────
   if (!authLoading && !isAuthenticated) {
     return (
       <main>
         <div className="page-shell">
-          {/* Hero */}
           <section className="hero-panel animate-in">
-            <p className="eyebrow">Match Readiness Platform</p>
-            <h1 className="title-xl" style={{ marginTop: "0.4rem", marginBottom: "0.6rem" }}>
+            <p className="eyebrow">Match Readiness</p>
+            <h1 className="title-xl" style={{ marginTop: "0.35rem", marginBottom: "0.6rem" }}>
               Build the squad before kickoff.
             </h1>
-            <p className="muted" style={{ fontSize: "0.95rem", maxWidth: "36rem" }}>
-              Captains send a link. Players tap YES and pay. Everyone knows who&apos;s in.
+            <p className="muted" style={{ fontSize: "0.93rem" }}>
+              Captain shares a link. Players tap YES and pay. Everyone knows who&apos;s in.
             </p>
             <div className="cluster" style={{ marginTop: "1.25rem" }}>
               <Link href="/match/join"><Button size="lg">Join a Match</Button></Link>
@@ -59,18 +62,17 @@ export default function HomePage() {
             </div>
           </section>
 
-          {/* 3-step strip */}
           <div className="grid grid-3">
             {[
-              { icon: "📣", step: "01", title: "Captain shares link", body: "One WhatsApp message, link opens on any phone" },
-              { icon: "💰", step: "02", title: "Player pays to confirm", body: "Tap YES → pay → captain confirms spot" },
-              { icon: "🔒", step: "03", title: "Squad locks automatically", body: "Once full, everyone knows the match is on" },
-            ].map(({ icon, step, title, body }) => (
-              <div key={step} className="panel animate-in" style={{ display: "grid", gap: "0.5rem" }}>
-                <div style={{ fontSize: "1.6rem" }}>{icon}</div>
-                <p className="eyebrow" style={{ color: "var(--text-faint)" }}>{step}</p>
-                <strong style={{ fontFamily: "var(--font-display)", fontSize: "0.95rem" }}>{title}</strong>
-                <p className="muted" style={{ fontSize: "0.82rem" }}>{body}</p>
+              { n: "01", icon: "📣", title: "Share link", body: "One message to WhatsApp" },
+              { n: "02", icon: "💰", title: "Players pay", body: "YES → pay → captain confirms" },
+              { n: "03", icon: "🔒", title: "Squad locks", body: "Everyone knows the match is on" },
+            ].map(({ n, icon, title, body }) => (
+              <div key={n} className="panel animate-in" style={{ display: "grid", gap: "0.4rem" }}>
+                <span style={{ fontSize: "1.5rem" }}>{icon}</span>
+                <p className="eyebrow" style={{ color: "var(--text-faint)" }}>{n}</p>
+                <strong style={{ fontFamily: "var(--font-display)", fontSize: "0.9rem" }}>{title}</strong>
+                <p className="muted" style={{ fontSize: "0.8rem" }}>{body}</p>
               </div>
             ))}
           </div>
@@ -83,144 +85,160 @@ export default function HomePage() {
 
   if (authLoading) return <main><Loader label="Loading…" /></main>;
 
-  // ── Signed in — action-oriented home feed ─────────────────────────────────
-  const upcomingMatches = dashboardMatches.filter((m) =>
-    ["RSVP_OPEN", "PAYMENT_PENDING", "LOCKED", "READY"].includes(m.status)
-  );
-  const myConfirmedMatches = upcomingMatches.filter((m) => m.captainId !== profile?.id);
-  const captainMatches = upcomingMatches.filter((m) => m.captainId === profile?.id);
+  // ── Signed in ─────────────────────────────────────────────────────────────
+  const upcoming      = dashboardMatches.filter(m => ["RSVP_OPEN","PAYMENT_PENDING","LOCKED","READY"].includes(m.status));
+  const captainMatches= upcoming.filter(m => m.captainId === profile?.id);
+  const playerMatches = upcoming.filter(m => m.captainId !== profile?.id);
+  const urgentCount   = pendingPayments.length + pendingAv.length;
 
-  const greet = () => {
+  const greeting = () => {
     const h = new Date().getHours();
-    if (h < 12) return "Good morning";
-    if (h < 17) return "Good afternoon";
-    return "Good evening";
+    return h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening";
   };
 
   return (
     <main>
       <div className="page-shell">
 
-        {/* ── Greeting ── */}
-        <section style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        {/* ── Header ── */}
+        <section style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0.25rem 0" }}>
           <div>
-            <p className="muted" style={{ fontSize: "0.85rem" }}>{greet()}</p>
-            <h1 style={{ fontFamily: "var(--font-display)", fontSize: "1.4rem", fontWeight: 800, margin: 0, color: "var(--text)" }}>
-              {profile?.displayName ?? "Captain"}
+            <p style={{ margin: 0, fontSize: "0.82rem", color: "var(--text-faint)" }}>{greeting()}</p>
+            <h1 style={{ margin: 0, fontFamily: "var(--font-display)", fontSize: "1.35rem", fontWeight: 800 }}>
+              {profile?.displayName ?? "Hey there"}
             </h1>
           </div>
-          <button onClick={() => void signOut()}
-            style={{ all: "unset", cursor: "pointer", fontSize: "0.8rem", color: "var(--text-faint)", padding: "0.4rem 0.75rem", border: "1px solid var(--line)", borderRadius: "999px" }}>
+          <button onClick={() => void signOut()} style={{ all: "unset", cursor: "pointer", fontSize: "0.78rem", color: "var(--text-faint)", padding: "0.35rem 0.7rem", border: "1px solid var(--line)", borderRadius: "999px" }}>
             Sign out
           </button>
         </section>
 
-        {/* ── SECTION 1: Pending actions (highest urgency) ── */}
-        {(pendingPayments.length > 0 || pendingAv.length > 0) && (
-          <section style={{ display: "grid", gap: "0.6rem" }}>
-            <p className="eyebrow" style={{ color: "var(--warning)" }}>⚠️ Action needed</p>
+        {/* ── SECTION 1: Urgent actions ── */}
+        {urgentCount > 0 && (
+          <section style={{ display: "grid", gap: "0.5rem" }}>
+            <div className="section-header">
+              <span className="section-title" style={{ color: "var(--danger)" }}>⚠️ Action required</span>
+            </div>
 
-            {pendingPayments.slice(0, 3).map((p) => (
-              <ActionCard key={p.id} icon="💰" title="Pay to confirm your spot"
-                subtitle={`Match · ₹${p.amount}`}
-                cta="Pay Now" href={`/match/${p.matchId}`} color="warning" />
+            {pendingPayments.slice(0, 2).map(p => (
+              <div key={p.id} className="action-card action-card--warning animate-in">
+                <div className="row" style={{ gap: "0.75rem", flex: 1, minWidth: 0 }}>
+                  <span style={{ fontSize: "1.4rem", flexShrink: 0 }}>💰</span>
+                  <div style={{ minWidth: 0 }}>
+                    <strong style={{ fontFamily: "var(--font-display)", fontSize: "0.9rem", display: "block" }}>
+                      Pay ₹{p.amount} to confirm
+                    </strong>
+                    <span className="faint" style={{ fontSize: "0.8rem" }}>Your spot is not locked yet</span>
+                  </div>
+                </div>
+                <Link href={`/match/${p.matchId}`} style={{ flexShrink: 0 }}>
+                  <Button size="sm">Pay Now</Button>
+                </Link>
+              </div>
             ))}
 
-            {pendingAv.slice(0, 3).map((item) => {
-              const chk = item.availability_checks;
+            {pendingAv.slice(0, 2).map(item => {
+              const c = item.availability_checks;
+              const d = new Date(c.match_date + "T00:00:00").toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" });
               return (
-                <ActionCard key={item.id} icon="📋" title="Are you available?"
-                  subtitle={`${fmtDate(chk.match_date)}${chk.match_time ? ` · ${chk.match_time}` : ""}${chk.venue_hint ? ` · ${chk.venue_hint}` : ""}`}
-                  cta="Respond" href="/availability" color="primary" />
+                <div key={item.id} className="action-card action-card--primary animate-in">
+                  <div className="row" style={{ gap: "0.75rem", flex: 1 }}>
+                    <span style={{ fontSize: "1.4rem", flexShrink: 0 }}>📋</span>
+                    <div>
+                      <strong style={{ fontFamily: "var(--font-display)", fontSize: "0.9rem", display: "block" }}>
+                        Are you available?
+                      </strong>
+                      <span className="faint" style={{ fontSize: "0.8rem" }}>{d}{c.match_time ? ` · ${c.match_time}` : ""}{c.venue_hint ? ` · ${c.venue_hint}` : ""}</span>
+                    </div>
+                  </div>
+                  <Link href="/availability" style={{ flexShrink: 0 }}>
+                    <Button size="sm" variant="secondary">Respond</Button>
+                  </Link>
+                </div>
               );
             })}
           </section>
         )}
 
-        {/* ── SECTION 2: Captain — needs review ── */}
+        {/* ── SECTION 2: Captain matches ── */}
         {captainMatches.length > 0 && (
-          <section style={{ display: "grid", gap: "0.6rem" }}>
-            <div className="row-between">
-              <p className="eyebrow">Captain</p>
-              <Link href="/matches" style={{ fontSize: "0.8rem", color: "var(--primary)", fontWeight: 600 }}>See all →</Link>
+          <section style={{ display: "grid", gap: "0.5rem" }}>
+            <div className="section-header">
+              <span className="section-title">Your matches as captain</span>
+              <Link href="/matches" className="section-link">See all</Link>
             </div>
-            {captainMatches.slice(0, 2).map((m) => (
-              <CaptainMatchCard key={m.id} match={m} />
-            ))}
+            {captainMatches.slice(0, 2).map(m => <CaptainCard key={m.id} match={m} />)}
           </section>
         )}
 
-        {/* ── SECTION 3: My confirmed matches ── */}
-        {myConfirmedMatches.length > 0 && (
-          <section style={{ display: "grid", gap: "0.6rem" }}>
-            <p className="eyebrow" style={{ color: "var(--success)" }}>✅ Your confirmed matches</p>
-            {myConfirmedMatches.map((m) => (
-              <PlayerMatchCard key={m.id} match={m} />
-            ))}
+        {/* ── SECTION 3: Player matches ── */}
+        {playerMatches.length > 0 && (
+          <section style={{ display: "grid", gap: "0.5rem" }}>
+            <div className="section-header">
+              <span className="section-title">Upcoming matches</span>
+              <Link href="/matches" className="section-link">See all</Link>
+            </div>
+            {playerMatches.slice(0, 3).map(m => <PlayerCard key={m.id} match={m} />)}
           </section>
         )}
 
-        {/* ── SECTION 4: All upcoming if nothing else ── */}
-        {captainMatches.length === 0 && myConfirmedMatches.length === 0 && pendingPayments.length === 0 && (
-          <>
-            {matchLoading ? (
-              <div className="panel" style={{ textAlign: "center", padding: "2rem" }}>
-                <Loader label="Loading matches…" />
-              </div>
-            ) : upcomingMatches.length > 0 ? (
-              <section style={{ display: "grid", gap: "0.6rem" }}>
-                <p className="eyebrow">Upcoming</p>
-                {upcomingMatches.slice(0, 3).map((m) => (
-                  <PlayerMatchCard key={m.id} match={m} />
-                ))}
-              </section>
-            ) : (
-              <div className="panel animate-in" style={{ textAlign: "center", padding: "2.5rem 1rem" }}>
-                <div style={{ fontSize: "2.5rem", marginBottom: "0.75rem" }}>🏟️</div>
-                <h3 className="title-md">No matches yet</h3>
-                <p className="muted" style={{ fontSize: "0.88rem", marginTop: "0.4rem" }}>
-                  Create one or join a squad using a link from your captain.
-                </p>
-                <div className="cluster" style={{ justifyContent: "center", marginTop: "1.25rem" }}>
-                  <Link href="/create/match"><Button>Create Match</Button></Link>
-                  <Link href="/match/join"><Button variant="secondary">Join Match</Button></Link>
-                </div>
-              </div>
-            )}
-          </>
+        {/* ── Empty state ── */}
+        {!matchLoading && upcoming.length === 0 && urgentCount === 0 && (
+          <div className="panel animate-in" style={{ textAlign: "center", padding: "2.5rem 1rem" }}>
+            <div style={{ fontSize: "2.5rem", marginBottom: "0.75rem" }}>🏟️</div>
+            <h3 className="title-md">No matches yet</h3>
+            <p className="muted" style={{ fontSize: "0.88rem", marginTop: "0.35rem" }}>
+              Create a match or join one using a link from your captain.
+            </p>
+            <div className="cluster" style={{ justifyContent: "center", marginTop: "1.25rem", gap: "0.6rem" }}>
+              <Link href="/create/match"><Button>Create Match</Button></Link>
+              <Link href="/match/join"><Button variant="ghost">Join Match</Button></Link>
+            </div>
+          </div>
         )}
 
-        {/* ── SECTION 5: My teams (compact) ── */}
+        {/* ── Teams strip ── */}
         {teams.length > 0 && (
-          <section style={{ display: "grid", gap: "0.6rem" }}>
-            <div className="row-between">
-              <p className="eyebrow">My Teams</p>
-              <Link href="/teams" style={{ fontSize: "0.8rem", color: "var(--primary)", fontWeight: 600 }}>Manage →</Link>
+          <section style={{ display: "grid", gap: "0.5rem" }}>
+            <div className="section-header">
+              <span className="section-title">My teams</span>
+              <Link href="/teams" className="section-link">Manage</Link>
             </div>
-            <div style={{ display: "flex", gap: "0.6rem", flexWrap: "wrap" }}>
-              {teams.slice(0, 4).map((t) => (
+            <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+              {teams.slice(0, 4).map(t => (
                 <Link key={t.id} href={`/team/${t.id}`}
-                  style={{ padding: "0.5rem 0.9rem", background: "var(--surface)", border: "1.5px solid var(--line)", borderRadius: "999px", fontSize: "0.88rem", fontWeight: 600, color: "var(--text)", display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                  style={{ padding: "0.45rem 0.85rem", background: "var(--surface)", border: "1px solid var(--line)", borderRadius: "999px", fontSize: "0.85rem", fontWeight: 600, color: "var(--text)", display: "inline-flex", alignItems: "center", gap: "0.35rem", boxShadow: "var(--shadow-xs)" }}>
                   🏟️ {t.name}
                 </Link>
               ))}
               <Link href="/teams"
-                style={{ padding: "0.5rem 0.9rem", background: "var(--surface-muted)", border: "1.5px dashed var(--line)", borderRadius: "999px", fontSize: "0.88rem", fontWeight: 600, color: "var(--text-faint)" }}>
-                + Add team
+                style={{ padding: "0.45rem 0.85rem", background: "transparent", border: "1px dashed var(--line)", borderRadius: "999px", fontSize: "0.85rem", fontWeight: 600, color: "var(--text-faint)", display: "inline-flex", alignItems: "center" }}>
+                + New
               </Link>
             </div>
           </section>
         )}
 
-        {/* ── Empty state for new users ── */}
-        {teams.length === 0 && upcomingMatches.length === 0 && (
-          <div className="panel animate-in" style={{ display: "grid", gap: "1rem", padding: "1.25rem" }}>
+        {/* ── New user onboarding ── */}
+        {teams.length === 0 && upcoming.length === 0 && (
+          <div className="panel animate-in" style={{ display: "grid", gap: "0.6rem" }}>
             <p className="eyebrow">Get started</p>
-            <div style={{ display: "grid", gap: "0.5rem" }}>
-              <Link href="/teams"><ActionBanner icon="🏟️" title="Create a team" sub="Invite your squad members" /></Link>
-              <Link href="/match/join"><ActionBanner icon="🔗" title="Join a match" sub="Open a link from your captain" /></Link>
-              <Link href="/availability"><ActionBanner icon="📋" title="Check availability requests" sub="See if your captain needs you" /></Link>
-            </div>
+            {[
+              { href: "/teams", icon: "🏟️", title: "Create a team", sub: "Add your squad members" },
+              { href: "/match/join", icon: "🔗", title: "Join a match", sub: "Open the link your captain sent" },
+              { href: "/availability", icon: "📋", title: "Check availability", sub: "See if your captain needs you" },
+            ].map(({ href, icon, title, sub }) => (
+              <Link key={href} href={href}>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", padding: "0.7rem", background: "var(--surface-muted)", borderRadius: "var(--radius-sm)", cursor: "pointer" }}>
+                  <span style={{ fontSize: "1.3rem", flexShrink: 0 }}>{icon}</span>
+                  <div style={{ flex: 1 }}>
+                    <strong style={{ fontFamily: "var(--font-display)", fontSize: "0.88rem", display: "block" }}>{title}</strong>
+                    <span className="faint" style={{ fontSize: "0.78rem" }}>{sub}</span>
+                  </div>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M9 18l6-6-6-6" /></svg>
+                </div>
+              </Link>
+            ))}
           </div>
         )}
 
@@ -229,116 +247,66 @@ export default function HomePage() {
   );
 }
 
-// ── Sub-components ──────────────────────────────────────────────────────────
+// ── Cards ─────────────────────────────────────────────────────────────────
 
-function ActionCard({ icon, title, subtitle, cta, href, color }: {
-  icon: string; title: string; subtitle: string; cta: string; href: string;
-  color: "warning" | "primary" | "danger";
-}) {
-  const colors = {
-    warning: { bg: "var(--warning-soft)", border: "#fde68a", text: "var(--warning)" },
-    primary: { bg: "var(--primary-soft)", border: "#a7f3c0",  text: "var(--primary)" },
-    danger:  { bg: "var(--danger-soft)",  border: "#fca5a5",  text: "var(--danger)"  },
-  };
-  const c = colors[color];
-  return (
-    <div style={{ background: c.bg, border: `1.5px solid ${c.border}`, borderRadius: "var(--radius-md)", padding: "1rem", display: "flex", justifyContent: "space-between", alignItems: "center", gap: "1rem" }}>
-      <div style={{ display: "flex", alignItems: "flex-start", gap: "0.75rem" }}>
-        <span style={{ fontSize: "1.4rem", flexShrink: 0 }}>{icon}</span>
-        <div>
-          <strong style={{ fontFamily: "var(--font-display)", fontSize: "0.95rem", display: "block" }}>{title}</strong>
-          <span style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>{subtitle}</span>
-        </div>
-      </div>
-      <Link href={href}>
-        <Button size="sm" style={{ flexShrink: 0, background: c.text, borderColor: c.text }}>{cta}</Button>
-      </Link>
-    </div>
-  );
-}
-
-function CaptainMatchCard({ match }: { match: MatchSummary }) {
+function CaptainCard({ match }: { match: MatchSummary }) {
   const confirmed = match.confirmedCount ?? 0;
   const total     = match.squadSize ?? 0;
   const pending   = match.pendingCount ?? 0;
   const left      = Math.max(0, total - confirmed);
+  const pct       = total > 0 ? Math.min((confirmed / total) * 100, 100) : 0;
+
   return (
     <Link href={`/match/control?matchId=${match.id}`} style={{ display: "block" }}>
-      <div className="panel" style={{ display: "grid", gap: "0.75rem", cursor: "pointer" }}>
+      <div className="panel animate-in" style={{ display: "grid", gap: "0.75rem", cursor: "pointer" }}>
         <div className="row-between">
-          <div>
-            <strong style={{ fontFamily: "var(--font-display)", fontSize: "1rem" }}>{match.title}</strong>
-            <div className="faint" style={{ fontSize: "0.8rem", marginTop: "0.1rem" }}>
-              {fmtDate(match.startsAt)} · {match.venueName}
-            </div>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: "0.98rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{match.title}</div>
+            <div className="faint" style={{ fontSize: "0.8rem", marginTop: "0.1rem" }}>{fmtShort(match.startsAt)} · {match.venueName}</div>
           </div>
-          <span className="badge badge-warning">Captain</span>
+          <span className="badge badge-blue" style={{ flexShrink: 0 }}>Captain</span>
         </div>
-        {/* Status bar */}
-        <div style={{ display: "flex", gap: "1rem", alignItems: "center" }}>
-          <span style={{ fontSize: "0.82rem", color: "var(--success)", fontWeight: 700 }}>✅ {confirmed} confirmed</span>
-          {pending > 0 && <span style={{ fontSize: "0.82rem", color: "var(--warning)", fontWeight: 700 }}>⏳ {pending} pending</span>}
-          <span style={{ fontSize: "0.82rem", color: "var(--text-faint)" }}>{left} slots left</span>
+
+        {/* Status bar mini */}
+        <div style={{ display: "flex", gap: "0.75rem", fontSize: "0.82rem", fontWeight: 700, fontFamily: "var(--font-display)" }}>
+          <span style={{ color: "var(--success)" }}>✅ {confirmed} confirmed</span>
+          {pending > 0 && <span style={{ color: "var(--warning)" }}>⏳ {pending} pending</span>}
+          <span style={{ color: "var(--text-faint)" }}>{left} left</span>
         </div>
-        {/* Mini progress */}
+
         <div className="progress-bar">
-          <div className="progress-bar__fill" style={{ width: total > 0 ? `${Math.min((confirmed / total) * 100, 100)}%` : "0%" }} />
+          <div className="progress-bar__fill" style={{ width: `${pct}%` }} />
         </div>
-        <span style={{ fontSize: "0.8rem", color: "var(--primary)", fontWeight: 600, fontFamily: "var(--font-display)" }}>
+
+        <div style={{ fontSize: "0.8rem", color: "var(--primary)", fontFamily: "var(--font-display)", fontWeight: 700 }}>
           Open control panel →
-        </span>
+        </div>
       </div>
     </Link>
   );
 }
 
-function PlayerMatchCard({ match }: { match: MatchSummary }) {
+function PlayerCard({ match }: { match: MatchSummary }) {
   const confirmed = match.confirmedCount ?? 0;
   const total     = match.squadSize ?? 0;
+  const isLocked  = match.status === "LOCKED" || match.status === "READY";
+  const cls       = isLocked ? "badge-success" : "badge-warning";
+
   return (
     <Link href={`/match/${match.id}`} style={{ display: "block" }}>
-      <div className="panel" style={{ display: "grid", gap: "0.6rem", cursor: "pointer" }}>
+      <div className="panel animate-in" style={{ display: "grid", gap: "0.6rem", cursor: "pointer" }}>
         <div className="row-between">
-          <div>
-            <strong style={{ fontFamily: "var(--font-display)", fontSize: "1rem" }}>{match.title}</strong>
-            <div className="faint" style={{ fontSize: "0.8rem", marginTop: "0.1rem" }}>
-              {fmtDate(match.startsAt)} · {match.venueName}
-            </div>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: "0.98rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{match.title}</div>
+            <div className="faint" style={{ fontSize: "0.8rem", marginTop: "0.1rem" }}>{fmtShort(match.startsAt)} · {match.venueName}</div>
           </div>
-          <StatusBadge status={match.status} />
+          <span className={`badge ${cls}`} style={{ flexShrink: 0 }}>{isLocked ? "Locked" : "Open"}</span>
         </div>
-        <div style={{ display: "flex", gap: "1rem", fontSize: "0.82rem" }}>
-          <span style={{ color: "var(--success)", fontWeight: 700 }}>👥 {confirmed}/{total}</span>
+        <div style={{ display: "flex", gap: "0.75rem", fontSize: "0.82rem", fontWeight: 700, fontFamily: "var(--font-display)" }}>
+          <span style={{ color: "var(--success)" }}>👥 {confirmed}/{total}</span>
           {match.pricePerPlayer > 0 && <span style={{ color: "var(--text-muted)" }}>₹{match.pricePerPlayer}</span>}
         </div>
       </div>
     </Link>
   );
-}
-
-function StatusBadge({ status }: { status: string }) {
-  const s = status.toUpperCase();
-  const cls = s === "LOCKED" || s === "READY" ? "badge-success"
-            : s === "RSVP_OPEN" || s === "PAYMENT_PENDING" ? "badge-warning"
-            : "";
-  return <span className={`badge ${cls}`}>{status.replace(/_/g, " ")}</span>;
-}
-
-function ActionBanner({ icon, title, sub }: { icon: string; title: string; sub: string }) {
-  return (
-    <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", padding: "0.75rem", background: "var(--surface-muted)", borderRadius: "var(--radius-sm)", cursor: "pointer" }}>
-      <span style={{ fontSize: "1.4rem", flexShrink: 0 }}>{icon}</span>
-      <div>
-        <strong style={{ fontFamily: "var(--font-display)", fontSize: "0.9rem", display: "block" }}>{title}</strong>
-        <span className="faint" style={{ fontSize: "0.78rem" }}>{sub}</span>
-      </div>
-      <svg style={{ marginLeft: "auto", flexShrink: 0 }} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M9 18l6-6-6-6" /></svg>
-    </div>
-  );
-}
-
-function fmtDate(s: string) {
-  if (!s) return "";
-  try { return new Date(s).toLocaleString("en-IN", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }); }
-  catch { return s; }
 }
