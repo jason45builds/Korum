@@ -32,7 +32,8 @@ export default function PlayerPollPage() {
   const [saving, setSaving]   = useState(false);
   const [upiCopied, setUpiCopied] = useState(false);
 
-  useEffect(() => { void load(); }, [token]); // eslint-disable-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { void load(); }, [token]);
 
   const load = async () => {
     try {
@@ -169,7 +170,7 @@ export default function PlayerPollPage() {
       <div style={{ display: "grid", gap: "0.6rem", marginTop: "1.25rem", width: "100%" }}>
         <button style={{ ...S.btnGreen, opacity: name.trim() ? 1 : 0.4 }}
           disabled={!name.trim() || saving} onClick={() => void handleYes()}>
-          {saving ? "Saving…" : isPaid ? `✅  I'm In — Pay ₹${price}` : "✅  I'm In"}
+          {saving ? "Saving…" : isPaid ? `✅  I’m In — Pay ₹${price}` : "✅  I’m In"}
         </button>
         <button style={{ ...S.btnAmber }}
           disabled={saving} onClick={() => void handleMaybe()}>
@@ -177,7 +178,7 @@ export default function PlayerPollPage() {
         </button>
         <button style={{ ...S.btnRed }}
           disabled={saving} onClick={() => void handleNo()}>
-          ❌  Can't Make It
+          ❌  Can’t Make It
         </button>
       </div>
       <button style={S.btnBack} onClick={() => setStep("landing")}>← Back</button>
