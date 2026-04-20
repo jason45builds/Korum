@@ -95,7 +95,8 @@ export default function CaptainControlPage() {
     const d = new Date(activeMatch.startsAt);
     const dateStr = d.toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" });
     const timeStr = d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
-    const txt = `⚽ *${activeMatch.title}*\n📅 ${dateStr} at ${timeStr}\n📍 ${activeMatch.venueName}\n💰 ₹${activeMatch.pricePerPlayer}\n\n👥 ${activeMatch.confirmedCount ?? 0}/${activeMatch.squadSize} players\n\nCan you play?\n👉 ${shareLink}`;
+    const confirmedCount = activeMatch.participants.filter((p) => ["CONFIRMED", "LOCKED"].includes(p.status)).length;
+    const txt = `⚽ *${activeMatch.title}*\n📅 ${dateStr} at ${timeStr}\n📍 ${activeMatch.venueName}\n💰 ₹${activeMatch.pricePerPlayer}\n\n👥 ${confirmedCount}/${activeMatch.squadSize} players\n\nCan you play?\n👉 ${shareLink}`;
     const wa  = `https://wa.me/?text=${encodeURIComponent(txt)}`;
     window.open(wa, "_blank");
     setWaCopied(true); setTimeout(() => setWaCopied(false), 3000);
