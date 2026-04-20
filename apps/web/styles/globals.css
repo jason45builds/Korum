@@ -395,6 +395,25 @@ main {
   stroke-width: 1.75;
 }
 
+/* FAB in bottom nav */
+.bottom-nav__fab {
+  display: grid;
+  place-items: center;
+  width: 2.8rem;
+  height: 2.8rem;
+  border-radius: 50%;
+  background: var(--primary);
+  color: white;
+  margin-top: -1.2rem;
+  box-shadow: 0 4px 20px var(--primary-glow);
+  border: 3px solid var(--bg);
+  transition: transform 150ms ease, box-shadow 150ms ease;
+}
+
+.bottom-nav__item:active .bottom-nav__fab {
+  transform: scale(0.93);
+}
+
 .bottom-nav__item.active,
 .bottom-nav__item:active {
   color: var(--primary);
