@@ -2,7 +2,7 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 
 import Link from "next/link";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 
 import { AuthPanel } from "@/components/shared/AuthPanel";
@@ -50,8 +50,23 @@ export default function MatchPage() {
   const isLocked   = activeMatch.status === "LOCKED" || activeMatch.status === "READY";
   const isCaptain  = isAuthenticated && activeMatch.captainId === profile?.id;
   const me         = isAuthenticated ? activeMatch.participants.find(p => p.userId === profile?.id) : null;
-  const meConfirmed = me && ["CONFIRMED","LOCKED"].includes(me.status);
-  const mePending   = me?.status === "PAYMENT_PENDING";
+  const meConfirmed  = me && ["CONFIRMED","LOCKED"].includes(me.status);
+  const mePending    = me?.status === "PAYMENT_PENDING";
+  const [droppingOut, setDroppingOut] = useState(false);
+  const [droppedOut, setDroppedOut]   = useState(false);
+
+  const handleDropOut = async () => {
+    if (!confirm("Are you sure? Dropping out after confirming will affect your reliability score.")) return;
+    setDroppingOut(true);
+    try {
+      await fetch("/api/participants/drop-out", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({ matchId: id }),
+      });
+      setDroppedOut(true);
+    } finally { setDroppingOut(false); }
+  };
 
   const pct = activeMatch.squadSize > 0
     ? Math.min((confirmed.length / activeMatch.squadSize) * 100, 100) : 0;
@@ -132,13 +147,28 @@ export default function MatchPage() {
             </p>
             <AuthPanel />
           </div>
-        ) : meConfirmed ? (
-          <div className="card card-pad animate-in" style={{ textAlign: "center", background: "var(--green-soft)", borderColor: "var(--green-border)" }}>
-            <div style={{ fontSize: 32, marginBottom: 8 }}>✅</div>
-            <p style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 16, color: "var(--green)" }}>
-              You&apos;re confirmed!
-            </p>
-            <p className="t-caption" style={{ marginTop: 4 }}>Your spot is locked. See you on the field.</p>
+        ) : meConfirmed && !droppedOut ? (
+          <div className="card card-pad animate-in" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <div style={{ textAlign: "center", padding: "0.5rem 0" }}>
+              <div style={{ fontSize: 32, marginBottom: 8 }}>✅</div>
+              <p style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 16, color: "var(--green)" }}>
+                You&apos;re confirmed!
+              </p>
+              <p className="t-caption" style={{ marginTop: 4 }}>Your spot is locked. See you on the field.</p>
+            </div>
+            {!isLocked && (
+              <button
+                onClick={() => void handleDropOut()}
+                disabled={droppingOut}
+                style={{ padding: "8px", border: "none", background: "transparent", color: "var(--red)", fontFamily: "var(--font-display)", fontWeight: 600, fontSize: 12, cursor: "pointer", opacity: droppingOut ? 0.5 : 1 }}>
+                {droppingOut ? "Cancelling…" : "Can no longer play? Drop out"}
+              </button>
+            )}
+          </div>
+        ) : meConfirmed && droppedOut ? (
+          <div className="card card-pad animate-in" style={{ textAlign: "center", background: "var(--red-soft)", borderColor: "var(--red-border)" }}>
+            <p style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 15, color: "var(--red)" }}>You&apos;ve dropped out</p>
+            <p className="t-caption" style={{ marginTop: 4 }}>Captain has been notified. Your reliability score has been updated.</p>
           </div>
         ) : mePending ? (
           <div className="card card-pad animate-in">

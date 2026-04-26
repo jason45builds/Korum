@@ -276,7 +276,13 @@ function ControlPanelContent() {
                 {activeMatch.status === "LOCKED" && (
                   <Button variant="secondary" onClick={() => void handleReady()} block>✅ Mark Ready</Button>
                 )}
-                <Link href={`/match/room?matchId=${matchId}`}>
+                {/* Post-match attendance */}
+            {(activeMatch.status === "READY" || activeMatch.status === "LOCKED") && (
+              <Link href={`/match/attendance?matchId=${matchId}`}>
+                <Button variant="ghost" block>📋 Record Attendance</Button>
+              </Link>
+            )}
+            <Link href={`/match/room?matchId=${matchId}`}>
                   <Button variant="ghost" block>🧠 Strategy Room</Button>
                 </Link>
               </div>
