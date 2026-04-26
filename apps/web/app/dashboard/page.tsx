@@ -3,8 +3,8 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
-import { AuthPanel } from "@/components/shared/AuthPanel";
 import { Loader } from "@/components/shared/Loader";
 import { useAuth } from "@/hooks/useAuth";
 import { useMatch } from "@/hooks/useMatch";
@@ -27,7 +27,8 @@ const fmt = (s: string) => {
 };
 
 // ─── GUEST HOME — shows value, soft login wall ─────────────────────────────
-function GuestHome({ showLogin, onShowLogin }: { showLogin: boolean; onShowLogin: () => void }) {
+function GuestHome() {
+  const router = useRouter();
   return (
     <main>
       <div className="page">
@@ -50,7 +51,7 @@ function GuestHome({ showLogin, onShowLogin }: { showLogin: boolean; onShowLogin
               </button>
             </Link>
             <button
-              onClick={onShowLogin}
+              onClick={() => router.push('/auth')}
               className="btn btn--secondary"
               style={{ flex: 1, borderRadius: "var(--r-lg)", minHeight: 50 }}>
               Sign In
@@ -111,36 +112,24 @@ function GuestHome({ showLogin, onShowLogin }: { showLogin: boolean; onShowLogin
           </div>
         </div>
 
-        {/* Soft login wall — shown after user tries to interact */}
-        {showLogin ? (
-          <div className="card card-pad animate-pop">
-            <p style={{ margin: "0 0 4px", fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 16 }}>
-              Sign in to get started
-            </p>
-            <p className="t-caption" style={{ marginBottom: 16 }}>
-              Create matches, join squads, track payments — all in one place.
-            </p>
-            <AuthPanel />
-          </div>
-        ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            {[
-              { icon: "🏏", title: "Create a match",   sub: "Set up fixtures in 30 seconds" },
-              { icon: "👥", title: "Fill your squad",  sub: "Players confirm with payment" },
-              { icon: "✅", title: "Everyone knows",   sub: "No more WhatsApp confusion" },
-            ].map(({ icon, title, sub }) => (
-              <button key={title} onClick={onShowLogin}
-                style={{ all: "unset", cursor: "pointer", display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", background: "var(--surface)", border: "1px solid var(--line)", borderRadius: "var(--r-md)", boxShadow: "var(--shadow-1)" }}>
-                <span style={{ fontSize: 20, flexShrink: 0 }}>{icon}</span>
-                <div style={{ flex: 1 }}>
-                  <p style={{ margin: 0, fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 14 }}>{title}</p>
-                  <p className="t-caption" style={{ marginTop: 2 }}>{sub}</p>
-                </div>
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--text-4)" strokeWidth="2.5" strokeLinecap="round"><path d="M9 18l6-6-6-6" /></svg>
-              </button>
-            ))}
-          </div>
-        )}
+        {/* CTA strip */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          {[
+            { icon: "🏏", title: "Create a match",   sub: "Set up fixtures in 30 seconds" },
+            { icon: "👥", title: "Fill your squad",  sub: "Players confirm with payment" },
+            { icon: "✅", title: "Everyone knows",   sub: "No more WhatsApp confusion" },
+          ].map(({ icon, title, sub }) => (
+            <button key={title} onClick={() => router.push('/auth')}
+              style={{ all: "unset", cursor: "pointer", display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", background: "var(--surface)", border: "1px solid var(--line)", borderRadius: "var(--r-md)", boxShadow: "var(--shadow-1)" }}>
+              <span style={{ fontSize: 20, flexShrink: 0 }}>{icon}</span>
+              <div style={{ flex: 1 }}>
+                <p style={{ margin: 0, fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 14 }}>{title}</p>
+                <p className="t-caption" style={{ marginTop: 2 }}>{sub}</p>
+              </div>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--text-4)" strokeWidth="2.5" strokeLinecap="round"><path d="M9 18l6-6-6-6" /></svg>
+            </button>
+          ))}
+        </div>
 
       </div>
     </main>
@@ -151,9 +140,8 @@ function GuestHome({ showLogin, onShowLogin }: { showLogin: boolean; onShowLogin
 export default function HomePage() {
   const { profile, isAuthenticated, loading: authLoading } = useAuth();
   const { dashboardMatches, pendingPayments, loading: matchLoading, loadDashboard } = useMatch();
-  const [teams, setTeams]       = useState<TeamDetails[]>([]);
-  const [pendingAv, setPendingAv] = useState<PendingAv[]>([]);
-  const [showLogin, setShowLogin] = useState(false);
+  const [teams, setTeams]         = useState<TeamDetails[]>([]);
+  const [pendingAv, setPendingAv]   = useState<PendingAv[]>([]);
 
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -170,7 +158,7 @@ export default function HomePage() {
 
   // Guest mode — show value before asking for login
   if (!isAuthenticated) {
-    return <GuestHome showLogin={showLogin} onShowLogin={() => setShowLogin(true)} />;
+    return <GuestHome />;
   }
 
   // ── SIGNED IN ──────────────────────────────────────────────────────────────

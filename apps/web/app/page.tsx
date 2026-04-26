@@ -151,7 +151,7 @@ export default function LandingPage() {
           {/* CTAs */}
           {phase >= 3 && (
             <div className="cta-anim" style={{ display: "flex", flexDirection: "column", gap: 12, width: "100%", maxWidth: 360 }}>
-              <Link href="/dashboard" className="pill-btn pill-btn--primary">
+              <Link href="/auth" className="pill-btn pill-btn--primary">
                 Create Account / Sign In
               </Link>
               <Link href="/dashboard" className="pill-btn pill-btn--outline">
@@ -321,7 +321,7 @@ export default function LandingPage() {
                 Join thousands of captains who run their squads on Korum.
               </p>
               <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                <Link href="/dashboard" className="pill-btn pill-btn--primary" style={{ width: "100%" }}>
+                <Link href="/auth" className="pill-btn pill-btn--primary" style={{ width: "100%" }}>
                   Get Started — It&apos;s Free
                 </Link>
                 <Link href="/dashboard" className="pill-btn pill-btn--ghost" style={{ width: "100%" }}>
