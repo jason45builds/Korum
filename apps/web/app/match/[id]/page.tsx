@@ -2,6 +2,7 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 
 import Link from "next/link";
+import { useEffect } from "react";
 import { useParams } from "next/navigation";
 
 import { AuthPanel } from "@/components/shared/AuthPanel";
@@ -10,213 +11,290 @@ import { Button } from "@/components/ui/Button";
 import { useAuth } from "@/hooks/useAuth";
 import { useMatch } from "@/hooks/useMatch";
 
-function fmt(s: string) {
-  try { return new Date(s).toLocaleString("en-IN", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }); }
+const fmt = (s: string) => {
+  if (!s) return "";
+  try { return new Date(s).toLocaleString("en-IN", { weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" }); }
   catch { return s; }
-}
-function initials(name: string) {
-  return name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2);
-}
+};
+
+const ini = (name: string) =>
+  name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2);
 
 export default function MatchPage() {
-  const params = useParams<{ id: string }>();
+  const { id } = useParams<{ id: string }>();
   const { profile, isAuthenticated, loading: authLoading } = useAuth();
-  const { activeMatch, loading } = useMatch(params.id);
+  const { activeMatch, loading } = useMatch(id);
 
   if (loading && !activeMatch) return <main><Loader label="Loading match…" /></main>;
 
   if (!activeMatch) {
     return (
       <main>
-        <div className="page-shell" style={{ textAlign: "center", padding: "3rem 1rem" }}>
-          <div style={{ fontSize: "2.5rem", marginBottom: "0.75rem" }}>🔍</div>
-          <h2 className="title-md">Match not found</h2>
-          <p className="muted" style={{ marginTop: "0.4rem", fontSize: "0.9rem" }}>Check the link or join code and try again.</p>
-          <div style={{ marginTop: "1.25rem" }}>
-            <Link href="/match/join"><Button>Join via code</Button></Link>
+        <div className="page" style={{ textAlign: "center", paddingTop: 48 }}>
+          <div style={{ fontSize: 44, marginBottom: 16 }}>🔍</div>
+          <h2 className="t-h2" style={{ marginBottom: 8 }}>Match not found</h2>
+          <p className="t-body" style={{ color: "var(--text-3)" }}>This link may have expired or the match was removed.</p>
+          <div style={{ marginTop: 24 }}>
+            <Link href="/match/join"><button className="btn btn--primary">Join via code</button></Link>
           </div>
         </div>
       </main>
     );
   }
 
-  if (authLoading) return <main><Loader label="Checking your session…" /></main>;
+  if (authLoading) return <main><Loader label="Checking session…" /></main>;
 
-  const confirmed = activeMatch.participants.filter(p => ["CONFIRMED","LOCKED"].includes(p.status)).length;
-  const pending   = activeMatch.participants.filter(p => p.status === "PAYMENT_PENDING").length;
-  const slotsLeft = Math.max(0, activeMatch.squadSize - confirmed);
-  const me        = isAuthenticated ? activeMatch.participants.find(p => p.userId === profile?.id) : null;
-  const isConfirmed = me && ["CONFIRMED","LOCKED"].includes(me.status);
-  const isPending   = me?.status === "PAYMENT_PENDING";
-  const isCaptain   = isAuthenticated && activeMatch.captainId === profile?.id;
+  const confirmed  = activeMatch.participants.filter(p => ["CONFIRMED","LOCKED"].includes(p.status));
+  const pending    = activeMatch.participants.filter(p => p.status === "PAYMENT_PENDING");
+  const slotsLeft  = Math.max(0, activeMatch.squadSize - confirmed.length);
+  const isLocked   = activeMatch.status === "LOCKED" || activeMatch.status === "READY";
+  const isCaptain  = isAuthenticated && activeMatch.captainId === profile?.id;
+  const me         = isAuthenticated ? activeMatch.participants.find(p => p.userId === profile?.id) : null;
+  const meConfirmed = me && ["CONFIRMED","LOCKED"].includes(me.status);
+  const mePending   = me?.status === "PAYMENT_PENDING";
 
-  const statusLabel = activeMatch.status === "LOCKED" || activeMatch.status === "READY"
-    ? { text: "Squad locked ✅", cls: "badge-success" }
-    : activeMatch.status === "PAYMENT_PENDING" || activeMatch.status === "RSVP_OPEN"
-    ? { text: "Filling squad", cls: "badge-warning" }
-    : { text: activeMatch.status.replace(/_/g, " "), cls: "" };
+  const pct = activeMatch.squadSize > 0
+    ? Math.min((confirmed.length / activeMatch.squadSize) * 100, 100) : 0;
+
+  // Accent bar color
+  const accentColor = isLocked ? "var(--green)"
+    : pending.length > 0 ? "var(--amber)"
+    : "var(--blue)";
 
   return (
     <main>
-      <div className="page-shell">
+      <div className="page">
 
-        {/* ── Match card ── */}
-        <section className="hero-panel animate-in">
-          <div className="row-between" style={{ marginBottom: "0.75rem" }}>
-            <span className={`badge ${statusLabel.cls}`}>{statusLabel.text}</span>
-            {isCaptain && (
-              <Link href={`/match/control?matchId=${activeMatch.id}`}>
-                <Button size="sm" variant="secondary">Captain Panel</Button>
-              </Link>
-            )}
+        {/* ── Match header card ── */}
+        <div className="card animate-in" style={{ overflow: "hidden" }}>
+          {/* Color accent bar */}
+          <div style={{ height: 4, background: accentColor }} />
+          <div className="card-pad">
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginBottom: 12 }}>
+              <div style={{ minWidth: 0 }}>
+                <h1 className="t-h2" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {activeMatch.title}
+                </h1>
+                <p className="t-caption" style={{ marginTop: 4 }}>📅 {fmt(activeMatch.startsAt)}</p>
+                {activeMatch.venueName && (
+                  <p className="t-caption" style={{ marginTop: 2 }}>📍 {activeMatch.venueName}</p>
+                )}
+                {activeMatch.pricePerPlayer > 0 && (
+                  <p className="t-caption" style={{ marginTop: 2 }}>💰 ₹{activeMatch.pricePerPlayer} per player</p>
+                )}
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6, alignItems: "flex-end", flexShrink: 0 }}>
+                {isCaptain && <span className="badge badge-blue">Captain</span>}
+                <span className={`badge ${isLocked ? "badge-green" : pending.length > 0 ? "badge-amber" : ""}`}>
+                  {isLocked ? "Locked ✅" : activeMatch.status.replace(/_/g, " ")}
+                </span>
+              </div>
+            </div>
+
+            {/* Stats strip */}
+            <div className="stats-strip">
+              <div className="stats-strip__item">
+                <span className="stats-strip__num" style={{ color: "var(--green)" }}>
+                  {confirmed.length}
+                </span>
+                <span className="stats-strip__label">Confirmed</span>
+              </div>
+              <div className="stats-strip__item">
+                <span className="stats-strip__num" style={{ color: pending.length > 0 ? "var(--amber)" : "var(--text-4)" }}>
+                  {pending.length}
+                </span>
+                <span className="stats-strip__label">Pending pay</span>
+              </div>
+              <div className="stats-strip__item">
+                <span className="stats-strip__num" style={{ color: slotsLeft > 0 ? "var(--blue)" : "var(--green)" }}>
+                  {slotsLeft}
+                </span>
+                <span className="stats-strip__label">Slots left</span>
+              </div>
+            </div>
+
+            {/* Fill progress */}
+            <div className="progress" style={{ marginTop: 12 }}>
+              <div className="progress__fill"
+                style={{ width: `${pct}%`, background: isLocked ? "var(--green)" : "var(--blue)" }} />
+            </div>
           </div>
+        </div>
 
-          <h1 className="title-lg">{activeMatch.title}</h1>
-          <p className="muted" style={{ marginTop: "0.3rem", fontSize: "0.9rem" }}>
-            📅 {fmt(activeMatch.startsAt)}
-          </p>
-          {activeMatch.venueName && (
-            <p className="muted" style={{ fontSize: "0.9rem" }}>📍 {activeMatch.venueName}</p>
-          )}
-          {activeMatch.pricePerPlayer > 0 && (
-            <p className="muted" style={{ fontSize: "0.9rem" }}>💰 ₹{activeMatch.pricePerPlayer} per player</p>
-          )}
-
-          {/* Status bar — the trust engine */}
-          <div className="status-bar" style={{ marginTop: "1rem" }}>
-            <div className="status-bar__item">
-              <span className="status-bar__num" style={{ color: "var(--success)" }}>{confirmed}</span>
-              <span className="status-bar__label">Confirmed</span>
-            </div>
-            <div className="status-bar__item">
-              <span className="status-bar__num" style={{ color: "var(--warning)" }}>{pending}</span>
-              <span className="status-bar__label">Pending</span>
-            </div>
-            <div className="status-bar__item">
-              <span className="status-bar__num" style={{ color: slotsLeft > 0 ? "var(--primary)" : "var(--success)" }}>{slotsLeft}</span>
-              <span className="status-bar__label">Slots left</span>
-            </div>
-          </div>
-        </section>
-
-        {/* ── CTA ── */}
+        {/* ── CTA block ── */}
         {!isAuthenticated ? (
-          <AuthPanel title="Sign in to join this match" />
-        ) : isConfirmed ? (
-          <div className="panel animate-in" style={{ textAlign: "center", padding: "1.25rem" }}>
-            <div style={{ fontSize: "2rem", marginBottom: "0.4rem" }}>✅</div>
-            <strong style={{ fontFamily: "var(--font-display)", fontSize: "1rem" }}>
-              You&apos;re confirmed!
-            </strong>
-            <p className="muted" style={{ fontSize: "0.88rem", marginTop: "0.25rem" }}>
-              Your spot is locked. See you on the field.
+          <div className="card card-pad animate-in">
+            <p style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 16, marginBottom: 4 }}>
+              Join this match
             </p>
+            <p className="t-caption" style={{ marginBottom: 16 }}>
+              Sign in to confirm your spot and pay.
+            </p>
+            <AuthPanel />
           </div>
-        ) : isPending ? (
-          <div className="panel animate-in" style={{ display: "grid", gap: "0.75rem" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-              <span style={{ fontSize: "1.5rem" }}>⏳</span>
+        ) : meConfirmed ? (
+          <div className="card card-pad animate-in" style={{ textAlign: "center", background: "var(--green-soft)", borderColor: "var(--green-border)" }}>
+            <div style={{ fontSize: 32, marginBottom: 8 }}>✅</div>
+            <p style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 16, color: "var(--green)" }}>
+              You&apos;re confirmed!
+            </p>
+            <p className="t-caption" style={{ marginTop: 4 }}>Your spot is locked. See you on the field.</p>
+          </div>
+        ) : mePending ? (
+          <div className="card card-pad animate-in">
+            <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 14 }}>
+              <span style={{ fontSize: 24 }}>⏳</span>
               <div>
-                <strong style={{ fontFamily: "var(--font-display)", fontSize: "0.95rem", display: "block" }}>
+                <p style={{ margin: 0, fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 15 }}>
                   Payment pending
-                </strong>
-                <span className="faint">Complete payment to confirm your spot</span>
+                </p>
+                <p className="t-caption" style={{ marginTop: 2 }}>Complete payment to confirm your spot</p>
               </div>
             </div>
             <Link href={`/match/payment?matchId=${activeMatch.id}`}>
-              <button className="btn-action btn-action--yes" style={{ marginTop: "0.25rem" }}>
+              <button className="btn-yes">
                 💰 Pay ₹{activeMatch.pricePerPlayer} Now
               </button>
             </Link>
           </div>
-        ) : !me ? (
-          <div className="panel animate-in" style={{ display: "grid", gap: "0.75rem" }}>
-            {slotsLeft > 0 ? (
-              <>
-                <Link href={`/match/join?matchId=${activeMatch.id}`}>
-                  <button className="btn-action btn-action--yes">
-                    ✅ I&apos;m In
-                  </button>
-                </Link>
-                <Link href={`/match/join?matchId=${activeMatch.id}`}>
-                  <button className="btn-action btn-action--no">
-                    ❌ Can&apos;t Play
-                  </button>
-                </Link>
-              </>
-            ) : (
-              <div style={{ textAlign: "center", padding: "0.5rem" }}>
-                <p className="muted" style={{ fontSize: "0.9rem" }}>Squad is full. No slots available.</p>
-              </div>
-            )}
+        ) : !me && slotsLeft > 0 ? (
+          <div className="card card-pad animate-in" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <Link href={`/match/join?matchId=${activeMatch.id}`}>
+              <button className="btn-yes">✅ I&apos;m In</button>
+            </Link>
+            <button className="btn-no">❌ Can&apos;t Play</button>
+          </div>
+        ) : !me && slotsLeft === 0 ? (
+          <div className="card card-pad animate-in" style={{ textAlign: "center" }}>
+            <p className="t-body" style={{ color: "var(--text-3)" }}>
+              Squad is full. No slots left.
+            </p>
           </div>
         ) : null}
 
-        {/* ── Player list ── */}
-        <section className="panel animate-in">
-          <p style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: "0.85rem", marginBottom: "0.75rem", color: "var(--text-muted)" }}>
-            PLAYERS ({activeMatch.participants.length}/{activeMatch.squadSize})
-          </p>
+        {/* ── Captain quick actions ── */}
+        {isCaptain && (
+          <div style={{ display: "flex", gap: 10 }}>
+            <Link href={`/match/control?matchId=${activeMatch.id}`} style={{ flex: 1 }}>
+              <button className="btn btn--primary btn--block">
+                Control Panel
+              </button>
+            </Link>
+            <Link href={`/match/room?matchId=${activeMatch.id}`} style={{ flex: 1 }}>
+              <button className="btn btn--secondary btn--block">
+                🧠 Strategy Room
+              </button>
+            </Link>
+          </div>
+        )}
 
-          {/* Confirmed */}
-          {activeMatch.participants.filter(p => ["CONFIRMED","LOCKED"].includes(p.status)).length > 0 && (
-            <>
-              <p style={{ fontSize: "0.72rem", fontWeight: 700, color: "var(--success)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: "0.25rem" }}>
-                Confirmed
-              </p>
-              {activeMatch.participants.filter(p => ["CONFIRMED","LOCKED"].includes(p.status)).map(p => (
-                <div key={p.participantId} className="player-row">
-                  <div className="player-avatar">{initials(p.fullName)}</div>
-                  <div style={{ flex: 1 }}>
-                    <div className="player-name">{p.fullName}</div>
-                  </div>
-                  <span style={{ fontSize: "1rem" }}>✅</span>
-                </div>
-              ))}
-            </>
-          )}
-
-          {/* Pending */}
-          {activeMatch.participants.filter(p => p.status === "PAYMENT_PENDING").length > 0 && (
-            <>
-              <p style={{ fontSize: "0.72rem", fontWeight: 700, color: "var(--warning)", letterSpacing: "0.08em", textTransform: "uppercase", margin: "0.75rem 0 0.25rem" }}>
-                Pending payment
-              </p>
-              {activeMatch.participants.filter(p => p.status === "PAYMENT_PENDING").map(p => (
-                <div key={p.participantId} className="player-row">
-                  <div className="player-avatar" style={{ background: "var(--warning-soft)", color: "var(--warning)" }}>{initials(p.fullName)}</div>
-                  <div style={{ flex: 1 }}>
-                    <div className="player-name">{p.fullName}</div>
-                    <div className="player-sub">Awaiting payment</div>
-                  </div>
-                  <span style={{ fontSize: "1rem" }}>⏳</span>
-                </div>
-              ))}
-            </>
-          )}
-
-          {activeMatch.participants.length === 0 && (
-            <p className="muted" style={{ fontSize: "0.9rem", textAlign: "center", padding: "1rem 0" }}>
-              No players yet. Share the link to fill the squad.
-            </p>
-          )}
-        </section>
-
-        {/* ── Strategy room link (after lock) ── */}
-        {(activeMatch.status === "LOCKED" || activeMatch.status === "READY") && isAuthenticated && (
-          <Link href={`/match/room?matchId=${activeMatch.id}`} style={{ display: "block" }}>
-            <div className="panel" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "1rem" }}>
-              <div className="row" style={{ gap: "0.75rem" }}>
-                <span style={{ fontSize: "1.4rem" }}>🧠</span>
+        {/* ── Strategy room link for locked matches (all players) ── */}
+        {isLocked && isAuthenticated && !isCaptain && (
+          <Link href={`/match/room?matchId=${activeMatch.id}`}>
+            <div className="card" style={{ padding: "14px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <span style={{ fontSize: 24 }}>🧠</span>
                 <div>
-                  <strong style={{ fontFamily: "var(--font-display)", fontSize: "0.93rem" }}>Match Room</strong>
-                  <div className="faint" style={{ fontSize: "0.8rem" }}>Strategy, lineup & coordination</div>
+                  <p style={{ margin: 0, fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 15 }}>
+                    Strategy Room
+                  </p>
+                  <p className="t-caption" style={{ marginTop: 2 }}>
+                    Lineup, tactics & coordination
+                  </p>
                 </div>
               </div>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M9 18l6-6-6-6" /></svg>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text-4)" strokeWidth="2.5" strokeLinecap="round">
+                <path d="M9 18l6-6-6-6" />
+              </svg>
             </div>
           </Link>
         )}
+
+        {/* ── Player list ── */}
+        <div className="card animate-in" style={{ overflow: "hidden" }}>
+          <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--line)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <p style={{ margin: 0, fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 13, color: "var(--text-3)", letterSpacing: "0.06em", textTransform: "uppercase" }}>
+              Squad ({activeMatch.participants.length}/{activeMatch.squadSize})
+            </p>
+            {slotsLeft > 0 && (
+              <span className="badge badge-blue">{slotsLeft} slot{slotsLeft > 1 ? "s" : ""} open</span>
+            )}
+          </div>
+
+          {/* Confirmed */}
+          {confirmed.length > 0 && (
+            <div style={{ padding: "8px 16px 0" }}>
+              <p style={{ fontSize: 10, fontWeight: 700, color: "var(--green)", letterSpacing: "0.1em", textTransform: "uppercase", margin: "8px 0 4px" }}>
+                Confirmed
+              </p>
+              {confirmed.map((p, i) => (
+                <div key={p.participantId} style={{
+                  display: "flex", alignItems: "center", gap: 12, padding: "10px 0",
+                  borderBottom: i < confirmed.length - 1 || pending.length > 0 ? "1px solid var(--line)" : "none"
+                }}>
+                  <div style={{ width: 36, height: 36, borderRadius: "50%", background: "var(--green-soft)", display: "grid", placeItems: "center", fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 12, color: "var(--green)", flexShrink: 0, border: "1.5px solid var(--green-border)" }}>
+                    {ini(p.fullName)}
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <p style={{ margin: 0, fontWeight: 600, fontSize: 14, color: "var(--text)" }}>{p.fullName}</p>
+                  </div>
+                  <span style={{ fontSize: 16 }}>✅</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Pending */}
+          {pending.length > 0 && (
+            <div style={{ padding: "0 16px 8px" }}>
+              <p style={{ fontSize: 10, fontWeight: 700, color: "var(--amber)", letterSpacing: "0.1em", textTransform: "uppercase", margin: "12px 0 4px" }}>
+                Pending payment
+              </p>
+              {pending.map((p, i) => (
+                <div key={p.participantId} style={{
+                  display: "flex", alignItems: "center", gap: 12, padding: "10px 0",
+                  borderBottom: i < pending.length - 1 ? "1px solid var(--line)" : "none"
+                }}>
+                  <div style={{ width: 36, height: 36, borderRadius: "50%", background: "var(--amber-soft)", display: "grid", placeItems: "center", fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 12, color: "var(--amber)", flexShrink: 0 }}>
+                    {ini(p.fullName)}
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <p style={{ margin: 0, fontWeight: 600, fontSize: 14 }}>{p.fullName}</p>
+                    <p className="t-caption" style={{ marginTop: 2 }}>Awaiting payment</p>
+                  </div>
+                  <span style={{ fontSize: 16 }}>⏳</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {activeMatch.participants.length === 0 && (
+            <div style={{ padding: "32px 16px", textAlign: "center" }}>
+              <p className="t-body" style={{ color: "var(--text-3)" }}>
+                No players yet. Share the match link to fill the squad.
+              </p>
+            </div>
+          )}
+
+          {/* Empty slots */}
+          {slotsLeft > 0 && (
+            <div style={{ padding: "12px 16px", borderTop: "1px solid var(--line)" }}>
+              {Array.from({ length: Math.min(slotsLeft, 4) }).map((_, i) => (
+                <div key={i} style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 0" }}>
+                  <div style={{ width: 36, height: 36, borderRadius: "50%", border: "1.5px dashed var(--line)", display: "grid", placeItems: "center", flexShrink: 0 }}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-4)" strokeWidth="2" strokeLinecap="round">
+                      <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2M12 3a4 4 0 110 8 4 4 0 010-8z"/>
+                    </svg>
+                  </div>
+                  <p style={{ margin: 0, fontSize: 13, color: "var(--text-4)", fontStyle: "italic" }}>Open slot</p>
+                </div>
+              ))}
+              {slotsLeft > 4 && (
+                <p className="t-caption" style={{ marginTop: 4 }}>+ {slotsLeft - 4} more open slots</p>
+              )}
+            </div>
+          )}
+        </div>
 
       </div>
     </main>
