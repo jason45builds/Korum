@@ -12,40 +12,27 @@ export async function GET(req: NextRequest) {
   const { user } = await requireAuthenticatedUser(req);
   const term = `%${q}%`;
 
-  const promises: Promise<unknown>[] = [];
+  const [matchRes, playerRes] = await Promise.all([
+    (type === "all" || type === "matches")
+      ? admin
+          .from("matches")
+          .select("id, title, venue_name, starts_at, sport, squad_size, price_per_player, status, join_code")
+          .eq("visibility", "PUBLIC")
+          .in("status", ["RSVP_OPEN", "PAYMENT_PENDING"])
+          .or(`title.ilike.${term},venue_name.ilike.${term},sport.ilike.${term}`)
+          .order("starts_at", { ascending: true })
+          .limit(10)
+      : Promise.resolve({ data: [] as Record<string, unknown>[], error: null }),
 
-  if (type === "all" || type === "matches") {
-    promises.push(
-      admin
-        .from("matches")
-        .select("id, title, venue_name, starts_at, sport, squad_size, price_per_player, status, join_code")
-        .eq("visibility", "PUBLIC")
-        .in("status", ["RSVP_OPEN", "PAYMENT_PENDING"])
-        .or(`title.ilike.${term},venue_name.ilike.${term},sport.ilike.${term}`)
-        .order("starts_at", { ascending: true })
-        .limit(10)
-    );
-  } else {
-    promises.push(Promise.resolve({ data: [], error: null }));
-  }
-
-  if (type === "all" || type === "players") {
-    promises.push(
-      admin
-        .from("users")
-        .select("id, full_name, display_name, city, default_sport, reliability_score, role")
-        .or(`full_name.ilike.${term},display_name.ilike.${term},city.ilike.${term}`)
-        .neq("id", user.id)
-        .limit(10)
-    );
-  } else {
-    promises.push(Promise.resolve({ data: [], error: null }));
-  }
-
-  const [matchRes, playerRes] = await Promise.all(promises) as [
-    { data: Record<string, unknown>[] | null; error: { message: string } | null },
-    { data: Record<string, unknown>[] | null; error: { message: string } | null },
-  ];
+    (type === "all" || type === "players")
+      ? admin
+          .from("users")
+          .select("id, full_name, display_name, city, default_sport, reliability_score, role")
+          .or(`full_name.ilike.${term},display_name.ilike.${term},city.ilike.${term}`)
+          .neq("id", user.id)
+          .limit(10)
+      : Promise.resolve({ data: [] as Record<string, unknown>[], error: null }),
+  ]);
 
   return NextResponse.json({
     matches: (matchRes.data ?? []).map(m => ({
@@ -55,7 +42,8 @@ export async function GET(req: NextRequest) {
     })),
     players: (playerRes.data ?? []).map(p => ({
       id: p.id, fullName: p.full_name, displayName: p.display_name,
-      city: p.city, sport: p.default_sport, reliabilityScore: p.reliability_score, role: p.role,
+      city: p.city, sport: p.default_sport,
+      reliabilityScore: p.reliability_score, role: p.role,
     })),
   });
 }
