@@ -1,12 +1,12 @@
 import type { ReactNode } from "react";
 import type { Viewport } from "next";
 import Link from "next/link";
-import { DM_Sans, Syne } from "next/font/google";
+import { Inter, Plus_Jakarta_Sans } from "next/font/google";
 import { BottomNav } from "@/components/layout/BottomNav";
 import "@/styles/globals.css";
 
-const displayFont = Syne({ subsets: ["latin"], variable: "--font-display", display: "swap" });
-const bodyFont    = DM_Sans({ subsets: ["latin"], variable: "--font-body",    display: "swap" });
+const displayFont = Plus_Jakarta_Sans({ subsets: ["latin"], variable: "--font-display", display: "swap", weight: ["600", "700", "800"] });
+const bodyFont    = Inter({ subsets: ["latin"], variable: "--font-body", display: "swap" });
 
 export const metadata = {
   title: "Korum",

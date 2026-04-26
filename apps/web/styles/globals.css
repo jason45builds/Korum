@@ -583,3 +583,16 @@ body { font-size: 15px; line-height: 1.55; }
 button, a { -webkit-tap-highlight-color: transparent; }
 button:active { opacity: 0.82; }
 
+/* ─── Plus Jakarta Sans tuning ─────────────────────────── */
+/* Jakarta is rounder and slightly more spaced than Syne — tighten tracking */
+.t-h1, .t-h2, .t-title, .title-xl, .title-lg, .title-md, .title-sm,
+.match-card__title, .stats-strip__num, .t-num {
+  letter-spacing: -0.02em;
+}
+.t-label, .section-label, .eyebrow, .badge, .tab, .bottom-nav__item {
+  letter-spacing: 0.04em;
+}
+/* Inter body: slightly more generous line height for readability */
+body { line-height: 1.6; }
+.t-caption { font-size: 12.5px; }
+
