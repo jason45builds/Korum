@@ -73,11 +73,15 @@ export default function ProfilePage() {
             <span className="stats-strip__label">Teams</span>
           </div>
           <div className="stats-strip__item">
-            <span className="stats-strip__num">–</span>
-            <span className="stats-strip__label">Matches</span>
+            <span className="stats-strip__num" style={{ color: profile?.role === "captain" ? "var(--blue)" : "var(--text)" }}>
+              {profile?.role === "captain" ? "Cap" : "Player"}
+            </span>
+            <span className="stats-strip__label">Role</span>
           </div>
           <div className="stats-strip__item">
-            <span className="stats-strip__num">–</span>
+            <span className="stats-strip__num" style={{ color: (profile?.reliabilityScore ?? 100) >= 80 ? "var(--green)" : (profile?.reliabilityScore ?? 100) >= 60 ? "var(--amber)" : "var(--red)" }}>
+              {profile?.reliabilityScore ?? 100}
+            </span>
             <span className="stats-strip__label">Reliability</span>
           </div>
         </div>

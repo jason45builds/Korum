@@ -270,7 +270,7 @@ function ControlPanelContent() {
             {/* Lifecycle */}
             <Card eyebrow="Match actions" title="Lifecycle">
               <div className="form-grid">
-                {activeMatch.status === "PAYMENT_PENDING" && (
+                {(activeMatch.status === "RSVP_OPEN" || activeMatch.status === "PAYMENT_PENDING") && (
                   <Button onClick={() => void handleLock()} block>🔒 Lock Squad</Button>
                 )}
                 {activeMatch.status === "LOCKED" && (

@@ -65,12 +65,15 @@ function CreateMatchInner() {
     if (!form.title.trim()) { setMsg("Enter a match title."); return; }
     setSub(true); setMsg(null);
     try {
+      const matchStart = new Date(form.startsAt);
+      const paymentDue  = new Date(matchStart.getTime() - 3 * 60 * 60 * 1000); // 3h before kickoff
+      const lockTime    = new Date(matchStart.getTime() - 1 * 60 * 60 * 1000); // 1h before kickoff
       const res = await createMatch({
         ...form,
         venueAddress: "", notes: "", visibility: "PUBLIC",
-        paymentDueAt: toLDT(new Date(Date.now() + 24 * 60 * 60 * 1000)),
-        lockAt:       toLDT(new Date(Date.now() + 36 * 60 * 60 * 1000)),
-        startsAt: new Date(form.startsAt).toISOString(),
+        paymentDueAt: paymentDue.toISOString(),
+        lockAt:       lockTime.toISOString(),
+        startsAt: matchStart.toISOString(),
         publishNow: true,
       });
       setCreatedId(String(res.match.id));

@@ -1,7 +1,7 @@
 "use client";
 /* eslint-disable react-hooks/exhaustive-deps */
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 
 import { Loader } from "@/components/shared/Loader";
@@ -97,8 +97,16 @@ function timeAgo(iso: string) {
 export default function ActivityPage() {
   const { profile, isAuthenticated, loading: authLoading } = useAuth();
   const { dashboardMatches, pendingPayments, loading, loadDashboard } = useMatch();
+  const loadedRef = useRef(false);
 
-  useEffect(() => { if (isAuthenticated) void loadDashboard(); }, [isAuthenticated]);
+  useEffect(() => {
+    if (!isAuthenticated || loadedRef.current) return;
+    // Only load if store is empty — avoids redundant fetch if dashboard already loaded
+    if (dashboardMatches.length === 0) {
+      loadedRef.current = true;
+      void loadDashboard();
+    }
+  }, [isAuthenticated]);
 
   if (!authLoading && !isAuthenticated) {
     return (

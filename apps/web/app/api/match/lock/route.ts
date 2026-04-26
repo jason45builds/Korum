@@ -27,8 +27,8 @@ export async function POST(request: Request) {
       throw new Error("Only the captain can lock the squad.");
     }
 
-    if (match.status !== "PAYMENT_PENDING") {
-      throw new Error("Match must be in payment pending before locking.");
+    if (!['RSVP_OPEN', 'PAYMENT_PENDING'].includes(match.status as string)) {
+      throw new Error("Match must be open before locking.");
     }
 
     const { data: lockedMatch, error: transitionError } = await admin.rpc("transition_match_state", {

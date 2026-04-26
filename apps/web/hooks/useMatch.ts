@@ -1,6 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+/* eslint-disable react-hooks/exhaustive-deps */
+
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { toErrorMessage } from "@/lib/helpers";
 import {
@@ -13,8 +15,13 @@ import {
   updateMatch,
   type CreateMatchInput,
 } from "@/services/api/match";
-import { useRealtime } from "@/hooks/useRealtime";
 import { useMatchStore } from "@/store/matchStore";
+
+// Local loading per-hook instance to avoid global loading bleed
+const useLocalLoading = () => {
+  const [loading, setLoading] = useState(false);
+  return { loading, setLoading };
+};
 
 export const useMatch = (matchId?: string | null) => {
   const [pendingPayments, setPendingPayments] = useState<
@@ -27,11 +34,13 @@ export const useMatch = (matchId?: string | null) => {
       createdAt: string;
     }>
   >([]);
+  const { loading: localLoading, setLoading: setLocalLoading } = useLocalLoading();
+  const fetchedRef = useRef<string | null>(null);
 
   const {
     activeMatch,
     dashboardMatches,
-    loading,
+    loading: globalLoading,
     error,
     setActiveMatch,
     setDashboardMatches,
@@ -40,8 +49,7 @@ export const useMatch = (matchId?: string | null) => {
   } = useMatchStore();
 
   const loadMatch = useCallback(async (params: { matchId?: string; joinCode?: string }) => {
-    setLoading(true);
-
+    setLocalLoading(true);
     try {
       const response = await getMatchDetail(params);
       setActiveMatch(response.match);
@@ -51,13 +59,12 @@ export const useMatch = (matchId?: string | null) => {
       setError(toErrorMessage(currentError));
       throw currentError;
     } finally {
-      setLoading(false);
+      setLocalLoading(false);
     }
-  }, [setActiveMatch, setError, setLoading]);
+  }, [setActiveMatch, setError, setLocalLoading]);
 
   const loadDashboard = useCallback(async () => {
     setLoading(true);
-
     try {
       const response = await getDashboardMatches();
       setDashboardMatches(response.matches);
@@ -77,23 +84,16 @@ export const useMatch = (matchId?: string | null) => {
     return response.matches;
   }, []);
 
-  const handleRealtimeChange = useCallback(() => {
-    if (matchId) {
-      void loadMatch({ matchId });
-    }
-  }, [loadMatch, matchId]);
-
-  useRealtime({
-    matchId,
-    onChange: handleRealtimeChange,
-  });
-
+  // Load match detail only once per matchId — no realtime loop
   useEffect(() => {
-    if (matchId) {
-      void loadMatch({ matchId }).catch(() => undefined);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [matchId]); // omit loadMatch from deps — stable ref but causes loop with Zustand setters
+    if (!matchId) return;
+    if (fetchedRef.current === matchId) return; // already fetched
+    fetchedRef.current = matchId;
+    void loadMatch({ matchId }).catch(() => undefined);
+  }, [matchId]);
+
+  // loading = local for match detail, global for dashboard
+  const loading = matchId ? localLoading : globalLoading;
 
   return {
     activeMatch,

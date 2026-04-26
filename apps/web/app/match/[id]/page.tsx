@@ -179,7 +179,14 @@ export default function MatchPage() {
             <Link href={`/match/join?matchId=${activeMatch.id}`}>
               <button className="btn-yes">✅ I&apos;m In</button>
             </Link>
-            <button className="btn-no">❌ Can&apos;t Play</button>
+            <button
+              className="btn-no"
+              onClick={() => {
+                // Player declines — no join, no action needed, just visual feedback
+                window.history.back();
+              }}>
+              ❌ Can&apos;t Play
+            </button>
           </div>
 
         ) : !me && slotsLeft === 0 ? (

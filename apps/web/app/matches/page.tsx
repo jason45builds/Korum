@@ -1,7 +1,7 @@
 "use client";
 /* eslint-disable react-hooks/exhaustive-deps */
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 
 import { AuthPanel } from "@/components/shared/AuthPanel";
@@ -22,8 +22,15 @@ export default function MatchesPage() {
   const { profile, isAuthenticated, loading: authLoading } = useAuth();
   const { dashboardMatches, loading, loadDashboard } = useMatch();
   const [filter, setFilter] = useState<Filter>("all");
+  const loadedRef = useRef(false);
 
-  useEffect(() => { if (isAuthenticated) void loadDashboard(); }, [isAuthenticated]);
+  useEffect(() => {
+    if (!isAuthenticated || loadedRef.current) return;
+    if (dashboardMatches.length === 0) {
+      loadedRef.current = true;
+      void loadDashboard();
+    }
+  }, [isAuthenticated]);
 
   if (!authLoading && !isAuthenticated) {
     return <main><div className="page"><AuthPanel title="Sign in to see your matches" /></div></main>;
