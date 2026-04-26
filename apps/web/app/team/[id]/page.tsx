@@ -65,6 +65,9 @@ export default function TeamPage() {
               <Link href={`/create/match?teamId=${params.id}`}>
                 <Button>⚽ Create Match</Button>
               </Link>
+              <Link href={`/team/${params.id}/procurement`}>
+                <Button variant="secondary">🛒 Squad Shopping</Button>
+              </Link>
             </div>
           </section>
         )}

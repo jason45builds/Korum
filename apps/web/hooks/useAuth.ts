@@ -159,6 +159,8 @@ export const useAuth = () => {
     defaultSport?: string | null;
     city?: string | null;
     role?: "captain" | "player";
+    upiId?: string | null;
+    upiName?: string | null;
   }) => {
     const response = await apiRequest<{ profile: UserProfile }>("/api/auth", {
       method: "POST",
