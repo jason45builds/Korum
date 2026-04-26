@@ -3,6 +3,7 @@ import type { Viewport } from "next";
 import Link from "next/link";
 import { Inter, Plus_Jakarta_Sans } from "next/font/google";
 import { BottomNav } from "@/components/layout/BottomNav";
+import { NotificationBell } from "@/components/layout/NotificationBell";
 import "@/styles/globals.css";
 
 const displayFont = Plus_Jakarta_Sans({ subsets: ["latin"], variable: "--font-display", display: "swap", weight: ["600", "700", "800"] });
@@ -61,11 +62,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
                   <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
                 </svg>
               </Link>
-              <Link href="/activity" className="app-header__icon-btn" aria-label="Notifications">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                  <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0" />
-                </svg>
-              </Link>
+              <NotificationBell />
             </div>
 
           </div>
