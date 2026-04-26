@@ -501,3 +501,85 @@ main {
 @supports (padding: max(0px)) {
   .app-header { padding-top: env(safe-area-inset-top, 0px); height: calc(var(--header-h) + env(safe-area-inset-top, 0px)); }
 }
+
+/* ─── v4 Polish — consumable, commercially sharp ──────────────────── */
+
+/* Slightly warmer background — less cold, more premium */
+:root {
+  --bg: #F4F6F9;
+  --surface-2: #F8F9FB;
+  --line: #E5E9EF;
+  /* Tighter radius for a more confident look */
+  --r-lg: 16px;
+  --r-xl: 22px;
+  /* Crisper shadows */
+  --shadow-1: 0 1px 3px rgba(13,20,33,0.06), 0 1px 2px rgba(13,20,33,0.04);
+  --shadow-2: 0 3px 10px rgba(13,20,33,0.09);
+  /* Tab bar height reduction — more content visible */
+  --tab-h: 60px;
+}
+
+/* Match card — slightly taller accent bar, lift on hover */
+.match-card { transition: box-shadow 160ms, transform 160ms; }
+.match-card:hover { box-shadow: var(--shadow-2); transform: translateY(-1px); }
+.match-card__accent { height: 4px; }
+
+/* Stats strip — larger numbers, more breathing room */
+.stats-strip__num { font-size: 24px; }
+.stats-strip__item { padding: 12px 8px; }
+
+/* Badges — slightly rounder, bolder text */
+.badge { font-size: 11px; padding: 4px 11px; }
+
+/* Bottom nav — active item gets a pill indicator above */
+.bottom-nav__item--active {
+  position: relative;
+}
+.bottom-nav__item--active::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 24px;
+  height: 3px;
+  border-radius: 0 0 var(--r-full) var(--r-full);
+  background: var(--blue);
+}
+
+/* App header — pure white, sharper border */
+.app-header { background: rgba(255,255,255,0.98); }
+
+/* Cards — no overflow hidden by default (let shadows show) */
+.card { overflow: visible; }
+
+/* Tab bar — more visible active state */
+.tab--active {
+  background: var(--surface);
+  color: var(--blue);
+  box-shadow: 0 1px 4px rgba(13,20,33,0.10);
+}
+
+/* Forms — cleaner focus ring */
+.input:focus, .textarea:focus, .select:focus {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 3px rgba(37,99,235,0.12);
+  background: var(--surface);
+}
+
+/* Page gap tighter — more content density */
+.page { gap: 12px; }
+
+/* Section labels — slightly larger, more weight */
+.section-label { font-size: 11px; letter-spacing: 0.08em; }
+
+/* Progress bar — slightly thicker */
+.progress { height: 5px; }
+
+/* Body font slightly larger for comfort */
+body { font-size: 15px; line-height: 1.55; }
+
+/* Smooth tap feedback on all interactive elements */
+button, a { -webkit-tap-highlight-color: transparent; }
+button:active { opacity: 0.82; }
+

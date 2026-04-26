@@ -80,21 +80,64 @@ export async function GET(request: Request) {
   }
 }
 
-// POST /api/availability-check — captain creates a check
+// POST /api/availability-check — captain creates a check OR player marks their own availability
 export async function POST(request: Request) {
   try {
     const admin = createAdminClient();
     const { user } = await requireAuthenticatedUser(request);
-    const body = createSchema.parse(await request.json());
+    const body = await request.json() as Record<string, unknown>;
+
+    // ── Player-initiated: mark their own availability for captain to see ──
+    if (body.playerInitiated === true) {
+      const { matchDate, matchTime, status, teamIds } = body as {
+        matchDate: string;
+        matchTime: string | null;
+        status: "AVAILABLE" | "UNAVAILABLE" | "MAYBE";
+        teamIds: string[] | null;
+      };
+
+      // Get all teams this user belongs to
+      const { data: memberships } = await admin
+        .from("memberships")
+        .select("team_id")
+        .eq("user_id", user.id)
+        .eq("is_active", true);
+
+      const allTeamIds = (memberships ?? []).map((m: { team_id: string }) => m.team_id);
+      const targetTeams = teamIds && teamIds.length > 0 ? teamIds : allTeamIds;
+
+      // Upsert a player_availability record per team
+      // We store this as an availability_response against a synthetic key,
+      // OR we create a standalone player_availability table entry.
+      // For now: insert into a player_availability table (create if not exists via upsert).
+      const records = targetTeams.map((teamId: string) => ({
+        user_id:    user.id,
+        team_id:    teamId,
+        match_date: matchDate,
+        match_time: matchTime ?? null,
+        status,
+        updated_at: new Date().toISOString(),
+      }));
+
+      const { error } = await admin
+        .from("player_availability")
+        .upsert(records, { onConflict: "user_id,team_id,match_date" });
+
+      if (error) throw new Error(error.message);
+      return NextResponse.json({ ok: true });
+    }
+
+    // ── Captain-initiated: create check for team ──
+    const parsed = createSchema.parse(body);
 
     const { data: check, error } = await admin.rpc("create_availability_check", {
-      p_team_id:    body.teamId,
+      p_team_id:    parsed.teamId,
       p_captain_id: user.id,
-      p_match_date: body.matchDate,
-      p_match_time: body.matchTime ?? null,
-      p_venue_hint: body.venueHint ?? null,
-      p_note:       body.note ?? null,
-      p_expires_at: body.expiresAt ?? null,
+      p_match_date: parsed.matchDate,
+      p_match_time: parsed.matchTime ?? null,
+      p_venue_hint: parsed.venueHint ?? null,
+      p_note:       parsed.note ?? null,
+      p_expires_at: parsed.expiresAt ?? null,
     });
 
     if (error) throw new Error(error.message);
