@@ -196,7 +196,7 @@ export default function PlayerAvailabilityPage() {
                   No pending requests from your captains.
                 </p>
                 <p className="t-caption" style={{ marginTop: 8 }}>
-                  Switch to "My Availability" to proactively mark your schedule.
+                  Switch to &ldquo;My Availability&rdquo; to proactively mark your schedule.
                 </p>
               </div>
             )}
