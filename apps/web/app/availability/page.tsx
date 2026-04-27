@@ -237,7 +237,7 @@ export default function PlayerAvailabilityPage() {
 
                     {/* 3 big response buttons */}
                     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                      {(["AVAILABLE", "MAYBE", "UNAVAILABLE"] as const).map(val => {
+                      {([“AVAILABLE”, “MAYBE”, “UNAVAILABLE”] as const).map(val => {
                         const cfg = statusConfig[val];
                         const isActive = responding === chk.id + val;
                         return (

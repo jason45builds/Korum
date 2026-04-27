@@ -1,7 +1,7 @@
 "use client";
 /* eslint-disable react-hooks/exhaustive-deps */
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/hooks/useAuth";
 import { AuthPanel } from "@/components/shared/AuthPanel";
@@ -15,6 +15,25 @@ export default function ProfilePage() {
   const [teams, setTeams]       = useState<TeamDetails[]>([]);
   const [loading, setLoading]   = useState(false);
   const [editing, setEditing]   = useState(false);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingPhoto(true);
+    try {
+      const fd = new FormData();
+      fd.append("avatar", file);
+      const res = await fetch("/api/upload/avatar", { method: "POST", credentials: "same-origin", body: fd });
+      if (!res.ok) { const d = await res.json() as { error?: string }; throw new Error(d.error ?? "Upload failed"); }
+      // Reload profile to get new avatar URL
+      window.location.reload();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Upload failed");
+    } finally { setUploadingPhoto(false); }
+  };
+
   const [saving, setSaving]     = useState(false);
   const [saveMsg, setSaveMsg]   = useState<{ text: string; ok: boolean } | null>(null);
 
@@ -87,8 +106,31 @@ export default function ProfilePage() {
 
         {/* Avatar + name */}
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "24px 0 8px", textAlign: "center" }}>
-          <div style={{ width: 80, height: 80, borderRadius: "50%", background: "var(--blue-soft)", border: "3px solid var(--blue-border)", display: "grid", placeItems: "center", fontFamily: "var(--font-display)", fontWeight: 900, fontSize: 28, color: "var(--blue)", marginBottom: 14 }}>
-            {ini(profile?.displayName)}
+          {/* Tappable avatar with upload */}
+          <div style={{ position: "relative", marginBottom: 14 }}>
+            <div
+              onClick={() => fileInputRef.current?.click()}
+              style={{ width: 80, height: 80, borderRadius: "50%", overflow: "hidden", border: "3px solid var(--blue-border)", cursor: "pointer", position: "relative", background: "var(--blue-soft)" }}>
+              {profile?.avatarUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={profile.avatarUrl} alt="Avatar" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              ) : (
+                <div style={{ width: "100%", height: "100%", display: "grid", placeItems: "center", fontFamily: "var(--font-display)", fontWeight: 900, fontSize: 28, color: "var(--blue)" }}>
+                  {ini(profile?.displayName)}
+                </div>
+              )}
+              {uploadingPhoto && (
+                <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.4)", display: "grid", placeItems: "center" }}>
+                  <div style={{ width: 20, height: 20, border: "2px solid rgba(255,255,255,0.5)", borderTopColor: "#fff", borderRadius: "50%", animation: "spin 0.7s linear infinite" }} />
+                </div>
+              )}
+            </div>
+            <div
+              onClick={() => fileInputRef.current?.click()}
+              style={{ position: "absolute", bottom: 0, right: 0, width: 24, height: 24, borderRadius: "50%", background: "var(--blue)", display: "grid", placeItems: "center", cursor: "pointer", border: "2px solid var(--bg)" }}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 013 3L7 19l-4 1 1-4L16.5 3.5z" /></svg>
+            </div>
+            <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp" style={{ display: "none" }} onChange={e => void handlePhotoUpload(e)} />
           </div>
           <h1 className="t-h2">{profile?.displayName ?? "Player"}</h1>
           {profile?.city && <p className="t-caption" style={{ marginTop: 2 }}>📍 {profile.city}</p>}

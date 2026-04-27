@@ -39,6 +39,10 @@ function CreateMatchInner() {
     squadSize: 11, pricePerPlayer: 250,
   });
 
+  const [isRecurring, setIsRecurring] = useState(false);
+  const [recurringForm, setRecurringForm] = useState({ frequency: "WEEKLY", dayOfWeek: 0, timeOfDay: "07:00", generateCount: 4 });
+  const DAYS = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+
   // Quick-create team inline
   const [showTeamForm, setShowTeamForm] = useState(false);
   const [teamDraft, setTeamDraft]       = useState({ name: "", sport: "Football", city: "" });
@@ -65,18 +69,45 @@ function CreateMatchInner() {
     if (!form.title.trim()) { setMsg("Enter a match title."); return; }
     setSub(true); setMsg(null);
     try {
-      const matchStart = new Date(form.startsAt);
-      const paymentDue  = new Date(matchStart.getTime() - 3 * 60 * 60 * 1000); // 3h before kickoff
-      const lockTime    = new Date(matchStart.getTime() - 1 * 60 * 60 * 1000); // 1h before kickoff
-      const res = await createMatch({
-        ...form,
-        venueAddress: "", notes: "", visibility: "PUBLIC",
-        paymentDueAt: paymentDue.toISOString(),
-        lockAt:       lockTime.toISOString(),
-        startsAt: matchStart.toISOString(),
-        publishNow: true,
-      });
-      setCreatedId(String(res.match.id));
+      if (isRecurring) {
+        // Create a recurring template then generate N matches
+        const tmplRes = await fetch("/api/recurring", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          credentials: "same-origin",
+          body: JSON.stringify({
+            teamId: form.teamId, title: form.title, sport: form.sport,
+            venueName: form.venueName, squadSize: form.squadSize,
+            pricePerPlayer: form.pricePerPlayer,
+            frequency: recurringForm.frequency,
+            dayOfWeek: recurringForm.dayOfWeek,
+            timeOfDay: recurringForm.timeOfDay,
+          }),
+        });
+        const tmpl = await tmplRes.json() as { template?: { id: string }; error?: string };
+        if (!tmplRes.ok) throw new Error(tmpl.error);
+        // Generate first batch
+        const genRes = await fetch("/api/recurring", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          credentials: "same-origin",
+          body: JSON.stringify({ action: "generate", templateId: tmpl.template!.id, count: recurringForm.generateCount }),
+        });
+        const gen = await genRes.json() as { created?: number; matchIds?: string[] };
+        setCreatedId(gen.matchIds?.[0] ?? null);
+        setMsg(`Created ${gen.created ?? 0} matches!`);
+      } else {
+        const matchStart = new Date(form.startsAt);
+        const paymentDue = new Date(matchStart.getTime() - 3 * 60 * 60 * 1000);
+        const lockTime   = new Date(matchStart.getTime() - 1 * 60 * 60 * 1000);
+        const res = await createMatch({
+          ...form,
+          venueAddress: "", notes: "", visibility: "PUBLIC",
+          paymentDueAt: paymentDue.toISOString(),
+          lockAt:       lockTime.toISOString(),
+          startsAt: matchStart.toISOString(),
+          publishNow: true,
+        });
+        setCreatedId(String(res.match.id));
+      }
     } catch (e) { setMsg(e instanceof Error ? e.message : "Failed"); }
     finally { setSub(false); }
   };
@@ -237,6 +268,51 @@ function CreateMatchInner() {
                   onChange={e => setForm(c => ({ ...c, pricePerPlayer: Number(e.target.value) }))} />
               </label>
             </div>
+
+            {/* Recurring toggle */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 14px", background: isRecurring ? "var(--blue-soft)" : "var(--surface-2)", border: `1.5px solid ${isRecurring ? "var(--blue-border)" : "var(--line)"}`, borderRadius: "var(--r-md)", cursor: "pointer" }}
+              onClick={() => setIsRecurring(v => !v)}>
+              <div>
+                <p style={{ margin: 0, fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 14, color: isRecurring ? "var(--blue)" : "var(--text)" }}>
+                  🔁 Recurring match
+                </p>
+                <p className="t-caption" style={{ marginTop: 2 }}>Create weekly/biweekly fixtures automatically</p>
+              </div>
+              <div style={{ width: 40, height: 22, borderRadius: 11, background: isRecurring ? "var(--blue)" : "var(--line)", position: "relative", transition: "background 200ms", flexShrink: 0 }}>
+                <div style={{ position: "absolute", top: 3, left: isRecurring ? 21 : 3, width: 16, height: 16, borderRadius: "50%", background: "#fff", transition: "left 200ms", boxShadow: "0 1px 4px rgba(0,0,0,0.2)" }} />
+              </div>
+            </div>
+
+            {isRecurring && (
+              <div style={{ padding: "14px", background: "var(--blue-soft)", borderRadius: "var(--r-md)", border: "1px solid var(--blue-border)", display: "flex", flexDirection: "column", gap: 10 }}>
+                <div className="field">
+                  <label className="field-label">Frequency</label>
+                  <select className="select" value={recurringForm.frequency} onChange={e => setRecurringForm(f => ({ ...f, frequency: e.target.value }))}>
+                    <option value="WEEKLY">Every week</option>
+                    <option value="BIWEEKLY">Every 2 weeks</option>
+                    <option value="MONTHLY">Every month</option>
+                  </select>
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                  <div className="field">
+                    <label className="field-label">Day</label>
+                    <select className="select" value={recurringForm.dayOfWeek} onChange={e => setRecurringForm(f => ({ ...f, dayOfWeek: Number(e.target.value) }))}>
+                      {DAYS.map((d, i) => <option key={d} value={i}>{d}</option>)}
+                    </select>
+                  </div>
+                  <div className="field">
+                    <label className="field-label">Time</label>
+                    <input type="time" className="input" value={recurringForm.timeOfDay} onChange={e => setRecurringForm(f => ({ ...f, timeOfDay: e.target.value }))} />
+                  </div>
+                </div>
+                <div className="field">
+                  <label className="field-label">Generate first</label>
+                  <select className="select" value={recurringForm.generateCount} onChange={e => setRecurringForm(f => ({ ...f, generateCount: Number(e.target.value) }))}>
+                    {[2,4,6,8,10,12].map(n => <option key={n} value={n}>{n} matches</option>)}
+                  </select>
+                </div>
+              </div>
+            )}
 
             <Button onClick={() => void handleCreate()} loading={submitting} size="lg" block>
               Create &amp; Get Share Link

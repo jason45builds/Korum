@@ -58,7 +58,7 @@ export default function MenuPage() {
             <p className="t-body" style={{ color: "var(--text-3)", marginBottom: 12 }}>
               Sign in for full access
             </p>
-            <Link href="/dashboard">
+            <Link href="/auth">
               <button className="btn btn--primary btn--block">Sign In / Sign Up</button>
             </Link>
           </div>

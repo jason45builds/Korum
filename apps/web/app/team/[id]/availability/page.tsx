@@ -97,6 +97,12 @@ export default function TeamAvailabilityPage() {
       const data = await res.json() as { check?: Check; error?: string };
       if (!res.ok) throw new Error(data.error ?? "Failed");
       setMsg({ text: "Availability check sent to all team members!", error: false });
+      // WhatsApp share
+      const dateStr = new Date(form.matchDate + "T00:00:00").toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" });
+      const waText = `Hey team! 🏐 Are you available for our next match?\n\n📅 ${dateStr}${form.matchTime ? ` at ${form.matchTime}` : ""}${form.venueHint ? `\n📍 ${form.venueHint}` : ""}${form.note ? `\n\n“${form.note}”` : ""}\n\nPlease check the Korum app and mark your availability: https://korum.vercel.app/availability`;
+      if (window.confirm("Check sent! Share on WhatsApp too?")) {
+        window.open(`https://wa.me/?text=${encodeURIComponent(waText)}`, "_blank");
+      }
       await loadChecks();
     } catch (err) {
       setMsg({ text: err instanceof Error ? err.message : "Failed", error: true });

@@ -60,7 +60,7 @@ function AttendanceContent() {
         throw new Error(d.error ?? "Failed");
       }
       setSaved(true);
-      setTimeout(() => router.push(`/match/control?matchId=${matchId}`), 1800);
+      setTimeout(() => router.push(`/match/motm?matchId=${matchId}`), 1800);
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Failed to save");
     } finally { setSaving(false); }

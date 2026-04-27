@@ -130,6 +130,21 @@ function ControlPanelContent() {
 
   const handleLock  = async () => { if (!matchId) return; try { await lockMatch(matchId); setMsg({ text: "Squad locked! 🔒", error: false }); await loadMatch({ matchId }); } catch (e) { setMsg({ text: e instanceof Error ? e.message : "Failed", error: true }); } };
   const handleReady = async () => { if (!matchId) return; try { await updateMatch({ matchId, nextState: "READY" }); setMsg({ text: "Match ready! ✅", error: false }); await loadMatch({ matchId }); } catch (e) { setMsg({ text: e instanceof Error ? e.message : "Failed", error: true }); } };
+  const handleDelete = async () => {
+    if (!matchId) return;
+    const hasPlayers = (pollData?.responses.filter(r => r.response === "YES").length ?? 0) + activeMatch!.participants.filter(p => ["CONFIRMED","LOCKED","PAYMENT_PENDING"].includes(p.status)).length;
+    const msg = hasPlayers > 0
+      ? `This match has ${hasPlayers} player(s) who responded. It will be CANCELLED (not deleted) so their records are preserved. Continue?`
+      : "Delete this match permanently?";
+    if (!confirm(msg)) return;
+    try {
+      const res = await fetch(`/api/match/delete?matchId=${matchId}`, { method: "DELETE", credentials: "same-origin" });
+      const data = await res.json() as { deleted?: boolean; cancelled?: boolean; error?: string };
+      if (!res.ok) throw new Error(data.error ?? "Failed");
+      setMsg({ text: data.cancelled ? "Match cancelled." : "Match deleted.", error: false });
+      setTimeout(() => { window.location.href = "/matches"; }, 1500);
+    } catch (e) { setMsg({ text: e instanceof Error ? e.message : "Failed", error: true }); }
+  };
 
   if (!matchId)        return <main><div className="page-shell"><p className="muted">No match ID.</p></div></main>;
   if (authLoading)     return <main><Loader label="Loading…" /></main>;
@@ -276,15 +291,26 @@ function ControlPanelContent() {
                 {activeMatch.status === "LOCKED" && (
                   <Button variant="secondary" onClick={() => void handleReady()} block>✅ Mark Ready</Button>
                 )}
-                {/* Post-match attendance */}
-            {(activeMatch.status === "READY" || activeMatch.status === "LOCKED") && (
-              <Link href={`/match/attendance?matchId=${matchId}`}>
-                <Button variant="ghost" block>📋 Record Attendance</Button>
-              </Link>
-            )}
-            <Link href={`/match/room?matchId=${matchId}`}>
+                {(activeMatch.status === "READY" || activeMatch.status === "LOCKED") && (
+                  <Link href={`/match/attendance?matchId=${matchId}`}>
+                    <Button variant="ghost" block>📋 Record Attendance</Button>
+                  </Link>
+                )}
+                {activeMatch.status === "READY" && (
+                  <Link href={`/match/motm?matchId=${matchId}`}>
+                    <Button variant="ghost" block>⭐ Player of the Match</Button>
+                  </Link>
+                )}
+                <Link href={`/match/room?matchId=${matchId}`}>
                   <Button variant="ghost" block>🧠 Strategy Room</Button>
                 </Link>
+                {!["LOCKED","READY","CANCELLED"].includes(activeMatch.status) && (
+                  <button
+                    onClick={() => void handleDelete()}
+                    style={{ width: "100%", padding: "10px", border: "1.5px solid var(--red-border)", borderRadius: "var(--r-md)", background: "var(--red-soft)", color: "var(--red)", fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 14, cursor: "pointer", marginTop: 4 }}>
+                    🗑️ Delete Match
+                  </button>
+                )}
               </div>
             </Card>
 
