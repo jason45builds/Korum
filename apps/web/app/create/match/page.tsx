@@ -100,7 +100,7 @@ function CreateMatchInner() {
         const lockTime   = new Date(matchStart.getTime() - 1 * 60 * 60 * 1000);
         const res = await createMatch({
           ...form,
-          venueAddress: "", notes: "", visibility: "PUBLIC",
+          venueAddress: form.venueName, notes: "", visibility: "PUBLIC",
           paymentDueAt: paymentDue.toISOString(),
           lockAt:       lockTime.toISOString(),
           startsAt: matchStart.toISOString(),

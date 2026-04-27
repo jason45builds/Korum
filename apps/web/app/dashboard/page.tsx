@@ -115,11 +115,11 @@ function GuestHome() {
         {/* CTA strip */}
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
           {[
-            { icon: "🏏", title: "Create a match",   sub: "Set up fixtures in 30 seconds" },
-            { icon: "👥", title: "Fill your squad",  sub: "Players confirm with payment" },
-            { icon: "✅", title: "Everyone knows",   sub: "No more WhatsApp confusion" },
-          ].map(({ icon, title, sub }) => (
-            <button key={title} onClick={() => router.push('/auth')}
+            { icon: "🏏", title: "Create a match",   sub: "Set up fixtures in 30 seconds", href: "/create/match" },
+            { icon: "👥", title: "Fill your squad",  sub: "Players confirm with payment",  href: "/auth" },
+            { icon: "✅", title: "Everyone knows",   sub: "No more WhatsApp confusion",     href: "/auth" },
+          ].map(({ icon, title, sub, href }) => (
+            <button key={title} onClick={() => router.push(href)}
               style={{ all: "unset", cursor: "pointer", display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", background: "var(--surface)", border: "1px solid var(--line)", borderRadius: "var(--r-md)", boxShadow: "var(--shadow-1)" }}>
               <span style={{ fontSize: 20, flexShrink: 0 }}>{icon}</span>
               <div style={{ flex: 1 }}>

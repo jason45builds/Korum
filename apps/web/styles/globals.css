@@ -101,7 +101,7 @@ main {
   max-width: var(--content-max);
   margin: 0 auto;
   min-height: calc(100dvh - var(--header-h));
-  padding: var(--sp-4) var(--page-x) calc(var(--tab-h) + var(--sp-6));
+  padding: var(--sp-4) var(--page-x) calc(var(--tab-h) + env(safe-area-inset-bottom, 0px) + var(--sp-6));
 }
 
 .page { display: flex; flex-direction: column; gap: var(--sp-4); }
@@ -444,7 +444,8 @@ main {
 
 /* ─── Bottom navigation ─────────────────────────────────────────────── */
 .bottom-nav {
-  display: none; position: fixed;
+  display: flex; align-items: stretch;
+  position: fixed;
   bottom: 0; left: 0; right: 0; z-index: 50;
   height: var(--tab-h);
   background: rgba(255,255,255,0.97);
@@ -487,7 +488,6 @@ main {
 /* ─── Responsive ────────────────────────────────────────────────────── */
 @media (max-width: 600px) {
   .nav-links { display: none; }
-  .bottom-nav { display: flex; align-items: stretch; }
   main { padding-bottom: calc(var(--tab-h) + env(safe-area-inset-bottom, 0px) + 16px); }
   .grid-2, .grid-3 { grid-template-columns: 1fr; }
 }
