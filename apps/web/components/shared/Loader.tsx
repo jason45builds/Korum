@@ -16,8 +16,8 @@ export function Loader({ label = "Loading..." }: { label?: string }) {
           width: "2.5rem",
           height: "2.5rem",
           borderRadius: "999px",
-          border: "3px solid var(--surface-accent)",
-          borderTopColor: "var(--primary)",
+          border: "3px solid var(--line)",
+          borderTopColor: "var(--blue)",
           animation: "spin 0.75s linear infinite",
         }}
       />

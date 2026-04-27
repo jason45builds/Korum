@@ -596,3 +596,41 @@ button:active { opacity: 0.82; }
 body { line-height: 1.6; }
 .t-caption { font-size: 12.5px; }
 
+/* ─── CSS Variable Aliases ─────────────────────────────────────────── */
+/* Many components were written with --primary, --danger, etc.          */
+/* These aliases map them to the real design system tokens.             */
+:root {
+  --primary:       var(--blue);
+  --danger:        var(--red);
+  --success:       var(--green);
+  --warning:       var(--amber);
+  --text-muted:    var(--text-3);
+  --text-faint:    var(--text-4);
+  --surface-muted: var(--surface-2);
+  --surface-accent:var(--surface-3);
+
+  /* Radius aliases */
+  --radius-xs: var(--r-xs);
+  --radius-sm: var(--r-sm);
+  --radius-md: var(--r-md);
+  --radius-lg: var(--r-lg);
+  --radius-xl: var(--r-xl);
+
+  /* Button component alias */
+  --font-display: 'Syne', sans-serif;
+}
+
+/* Progress bar alias (used as .progress-bar / .progress-bar__fill in captain page) */
+.progress-bar {
+  height: 5px;
+  background: var(--line);
+  border-radius: var(--r-full);
+  overflow: hidden;
+}
+.progress-bar__fill {
+  height: 100%;
+  border-radius: var(--r-full);
+  background: linear-gradient(90deg, var(--blue), #60A5FA);
+  transition: width 600ms ease;
+}
+

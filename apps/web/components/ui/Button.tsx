@@ -14,17 +14,17 @@ type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
 };
 
 const V: Record<Variant, { bg: string; color: string; border: string }> = {
-  primary:   { bg: "var(--primary)",        color: "#fff",              border: "var(--primary)"     },
-  secondary: { bg: "transparent",           color: "var(--primary)",    border: "var(--primary)"     },
-  ghost:     { bg: "transparent",           color: "var(--text-muted)", border: "var(--line)"        },
-  danger:    { bg: "var(--danger)",         color: "#fff",              border: "var(--danger)"      },
-  success:   { bg: "var(--success)",        color: "#fff",              border: "var(--success)"     },
+  primary:   { bg: "var(--blue)",    color: "#fff",              border: "var(--blue)"    },
+  secondary: { bg: "transparent",    color: "var(--blue)",       border: "var(--blue)"    },
+  ghost:     { bg: "transparent",    color: "var(--text-3)",     border: "var(--line)"    },
+  danger:    { bg: "var(--red)",      color: "#fff",              border: "var(--red)"     },
+  success:   { bg: "var(--green)",    color: "#fff",              border: "var(--green)"   },
 };
 
 const SZ: Record<Size, { p: string; h: string; fs: string; r: string }> = {
-  sm: { p: "0.5rem 0.95rem",  h: "36px", fs: "0.82rem", r: "var(--radius-sm)" },
-  md: { p: "0.75rem 1.25rem", h: "48px", fs: "0.92rem", r: "var(--radius-md)" },
-  lg: { p: "0.95rem 1.5rem",  h: "56px", fs: "1rem",    r: "var(--radius-lg)" },
+  sm: { p: "0.5rem 0.95rem",  h: "36px", fs: "0.82rem", r: "var(--r-sm)" },
+  md: { p: "0.75rem 1.25rem", h: "48px", fs: "0.92rem", r: "var(--r-md)" },
+  lg: { p: "0.95rem 1.5rem",  h: "56px", fs: "1rem",    r: "var(--r-lg)" },
 };
 
 export function Button({
@@ -43,7 +43,7 @@ export function Button({
         gap: "0.45rem", width: block ? "100%" : undefined,
         minHeight: s.h, padding: s.p, fontSize: s.fs, borderRadius: s.r,
         border: `1.5px solid ${v.border}`, background: v.bg, color: v.color,
-        fontFamily: "var(--font-display)", fontWeight: 700,
+        fontFamily: "var(--font-display, 'Syne')", fontWeight: 700,
         letterSpacing: "0.01em", whiteSpace: "nowrap",
         cursor: off ? "not-allowed" : "pointer",
         opacity: off ? 0.5 : 1,
