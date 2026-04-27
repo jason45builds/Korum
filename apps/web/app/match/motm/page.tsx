@@ -1,5 +1,6 @@
 "use client";
 /* eslint-disable react-hooks/exhaustive-deps */
+/* eslint-disable @next/next/no-img-element */
 
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";

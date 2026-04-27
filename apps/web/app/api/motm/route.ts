@@ -16,7 +16,8 @@ export async function GET(req: NextRequest) {
 
   const tally: Record<string, { name: string; avatar: string | null; count: number }> = {};
   for (const v of (votes ?? [])) {
-    const u = v.users as { full_name: string; display_name: string; avatar_url: string | null } | null;
+    const userRaw = v.users as unknown;
+    const u = Array.isArray(userRaw) ? (userRaw[0] as { full_name: string; display_name: string; avatar_url: string | null } | undefined) : (userRaw as { full_name: string; display_name: string; avatar_url: string | null } | null);
     const name = u?.display_name ?? u?.full_name ?? "Player";
     if (!tally[v.nominee_id as string]) tally[v.nominee_id as string] = { name, avatar: u?.avatar_url ?? null, count: 0 };
     tally[v.nominee_id as string].count++;
