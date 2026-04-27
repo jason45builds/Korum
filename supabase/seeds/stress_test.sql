@@ -1,106 +1,158 @@
 -- ═══════════════════════════════════════════════════════════════════════════
--- KORUM STRESS TEST SEED
--- Paste this entire script into Supabase SQL Editor and run it.
--- Creates: 2 captains + 22 players, 2 teams, 1 cricket match, 1 vendor,
---          4 products, 1 procurement list with votes + contributions,
---          match participants, payments, attendance, MOTM votes.
+-- KORUM STRESS TEST SEED v3
+-- Correct table names: match_participants, payments (with receipt), etc.
+-- Run in Supabase SQL Editor (service_role bypasses RLS).
 -- ═══════════════════════════════════════════════════════════════════════════
 
--- ── STEP 0: Clean up any previous seed data ────────────────────────────────
+-- ── STEP 0: Clean previous seed data ──────────────────────────────────────
 do $$
 declare
-  v_team_a   uuid;
-  v_team_b   uuid;
+  v_ids uuid[] := array[
+    'a0000000-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000002',
+    'a0000000-0000-0000-0000-000000000003','a0000000-0000-0000-0000-000000000004',
+    'a0000000-0000-0000-0000-000000000005','a0000000-0000-0000-0000-000000000006',
+    'a0000000-0000-0000-0000-000000000007','a0000000-0000-0000-0000-000000000008',
+    'a0000000-0000-0000-0000-000000000009','a0000000-0000-0000-0000-000000000010',
+    'a0000000-0000-0000-0000-000000000011',
+    'b0000000-0000-0000-0000-000000000001','b0000000-0000-0000-0000-000000000002',
+    'b0000000-0000-0000-0000-000000000003','b0000000-0000-0000-0000-000000000004',
+    'b0000000-0000-0000-0000-000000000005','b0000000-0000-0000-0000-000000000006',
+    'b0000000-0000-0000-0000-000000000007','b0000000-0000-0000-0000-000000000008',
+    'b0000000-0000-0000-0000-000000000009','b0000000-0000-0000-0000-000000000010',
+    'b0000000-0000-0000-0000-000000000011'
+  ];
 begin
-  select id into v_team_a from public.teams where slug = 'seed-desert-wings-cc';
-  select id into v_team_b from public.teams where slug = 'seed-marina-strikers-cc';
-
-  if v_team_a is not null then
-    delete from public.procurement_lists where team_id in (v_team_a, v_team_b);
-    delete from public.matches where team_id in (v_team_a, v_team_b);
-    delete from public.memberships where team_id in (v_team_a, v_team_b);
-    delete from public.teams where id in (v_team_a, v_team_b);
-  end if;
-  delete from public.vendors where name = 'SEED: SportZone Chennai';
-  delete from public.users where phone like 'seed-%';
+  delete from public.motm_votes              where match_id  = 'cccccccc-0000-0000-0000-000000000001';
+  delete from public.match_attendance        where match_id  = 'cccccccc-0000-0000-0000-000000000001';
+  delete from public.strategy_notes         where match_id  = 'cccccccc-0000-0000-0000-000000000001';
+  delete from public.procurement_contributions where item_id in (
+    'f1f1f1f1-0000-0000-0000-000000000001',
+    'f2f2f2f2-0000-0000-0000-000000000002',
+    'f3f3f3f3-0000-0000-0000-000000000003');
+  delete from public.procurement_votes       where item_id in (
+    'f1f1f1f1-0000-0000-0000-000000000001',
+    'f2f2f2f2-0000-0000-0000-000000000002',
+    'f3f3f3f3-0000-0000-0000-000000000003');
+  delete from public.procurement_items       where list_id = 'ffffffff-0000-0000-0000-000000000001';
+  delete from public.procurement_lists       where id      = 'ffffffff-0000-0000-0000-000000000001';
+  delete from public.payments                where match_id = 'cccccccc-0000-0000-0000-000000000001';
+  delete from public.match_participants      where match_id = 'cccccccc-0000-0000-0000-000000000001';
+  delete from public.matches                 where id       = 'cccccccc-0000-0000-0000-000000000001';
+  delete from public.vendor_products         where vendor_id = 'dddddddd-0000-0000-0000-000000000001';
+  delete from public.vendors                 where id        = 'dddddddd-0000-0000-0000-000000000001';
+  delete from public.availability_responses  where check_id = 'a1a1a1a1-0000-0000-0000-000000000001';
+  delete from public.availability_checks     where id       = 'a1a1a1a1-0000-0000-0000-000000000001';
+  delete from public.memberships             where team_id in (
+    'aaaaaaaa-0000-0000-0000-000000000001',
+    'bbbbbbbb-0000-0000-0000-000000000001');
+  delete from public.teams  where slug in ('seed-desert-wings-cc','seed-marina-strikers-cc');
+  delete from public.users  where id = any(v_ids);
+  delete from auth.users    where id = any(v_ids);
 end $$;
 
--- ── STEP 1: Create 24 fake users (bypass auth — direct insert) ────────────
--- Note: These are pure DB users without auth.users entries.
--- We use service_role so RLS is bypassed.
+-- ── STEP 1: auth.users → trigger auto-creates public.users ────────────────
+insert into auth.users (
+  id, instance_id, aud, role,
+  email, encrypted_password,
+  email_confirmed_at, created_at, updated_at,
+  raw_user_meta_data, is_sso_user, deleted_at
+)
+select
+  id::uuid,
+  '00000000-0000-0000-0000-000000000000'::uuid,
+  'authenticated', 'authenticated',
+  email,
+  '$2a$10$PNkxGn4hnzNFPjOEWHPBIeHYGEJFGI7L5XKsYMQWkDTi9Ml9eN/7u',
+  now(), now(), now(),
+  meta::jsonb, false, null
+from (values
+  ('a0000000-0000-0000-0000-000000000001','seed_cap_a@korum.test', '{"full_name":"Arjun Kapoor",   "phone":"seed-cap-a","default_sport":"Cricket","city":"Chennai"}'),
+  ('a0000000-0000-0000-0000-000000000002','seed_p_a02@korum.test', '{"full_name":"Vikram Sharma",  "phone":"seed-p-a02","default_sport":"Cricket","city":"Chennai"}'),
+  ('a0000000-0000-0000-0000-000000000003','seed_p_a03@korum.test', '{"full_name":"Rahul Mehta",    "phone":"seed-p-a03","default_sport":"Cricket","city":"Chennai"}'),
+  ('a0000000-0000-0000-0000-000000000004','seed_p_a04@korum.test', '{"full_name":"Priya Nair",     "phone":"seed-p-a04","default_sport":"Cricket","city":"Chennai"}'),
+  ('a0000000-0000-0000-0000-000000000005','seed_p_a05@korum.test', '{"full_name":"Karthik Rajan",  "phone":"seed-p-a05","default_sport":"Cricket","city":"Chennai"}'),
+  ('a0000000-0000-0000-0000-000000000006','seed_p_a06@korum.test', '{"full_name":"Sneha Pillai",   "phone":"seed-p-a06","default_sport":"Cricket","city":"Chennai"}'),
+  ('a0000000-0000-0000-0000-000000000007','seed_p_a07@korum.test', '{"full_name":"Dev Anand",      "phone":"seed-p-a07","default_sport":"Cricket","city":"Chennai"}'),
+  ('a0000000-0000-0000-0000-000000000008','seed_p_a08@korum.test', '{"full_name":"Meera Krishnan", "phone":"seed-p-a08","default_sport":"Cricket","city":"Chennai"}'),
+  ('a0000000-0000-0000-0000-000000000009','seed_p_a09@korum.test', '{"full_name":"Ravi Sundaram",  "phone":"seed-p-a09","default_sport":"Cricket","city":"Chennai"}'),
+  ('a0000000-0000-0000-0000-000000000010','seed_p_a10@korum.test', '{"full_name":"Ananya Iyer",    "phone":"seed-p-a10","default_sport":"Cricket","city":"Chennai"}'),
+  ('a0000000-0000-0000-0000-000000000011','seed_p_a11@korum.test', '{"full_name":"Siva Kumar",     "phone":"seed-p-a11","default_sport":"Cricket","city":"Chennai"}'),
+  ('b0000000-0000-0000-0000-000000000001','seed_cap_b@korum.test', '{"full_name":"Deepa Venkat",   "phone":"seed-cap-b","default_sport":"Cricket","city":"Chennai"}'),
+  ('b0000000-0000-0000-0000-000000000002','seed_p_b02@korum.test', '{"full_name":"Naveen Balaji",  "phone":"seed-p-b02","default_sport":"Cricket","city":"Chennai"}'),
+  ('b0000000-0000-0000-0000-000000000003','seed_p_b03@korum.test', '{"full_name":"Lakshmi Devi",   "phone":"seed-p-b03","default_sport":"Cricket","city":"Chennai"}'),
+  ('b0000000-0000-0000-0000-000000000004','seed_p_b04@korum.test', '{"full_name":"Suresh Babu",    "phone":"seed-p-b04","default_sport":"Cricket","city":"Chennai"}'),
+  ('b0000000-0000-0000-0000-000000000005','seed_p_b05@korum.test', '{"full_name":"Kavya Menon",    "phone":"seed-p-b05","default_sport":"Cricket","city":"Chennai"}'),
+  ('b0000000-0000-0000-0000-000000000006','seed_p_b06@korum.test', '{"full_name":"Ajay Thomas",    "phone":"seed-p-b06","default_sport":"Cricket","city":"Chennai"}'),
+  ('b0000000-0000-0000-0000-000000000007','seed_p_b07@korum.test', '{"full_name":"Nisha Pillai",   "phone":"seed-p-b07","default_sport":"Cricket","city":"Chennai"}'),
+  ('b0000000-0000-0000-0000-000000000008','seed_p_b08@korum.test', '{"full_name":"Gopal Krishna",  "phone":"seed-p-b08","default_sport":"Cricket","city":"Chennai"}'),
+  ('b0000000-0000-0000-0000-000000000009','seed_p_b09@korum.test', '{"full_name":"Divya Sharma",   "phone":"seed-p-b09","default_sport":"Cricket","city":"Chennai"}'),
+  ('b0000000-0000-0000-0000-000000000010','seed_p_b10@korum.test', '{"full_name":"Mohan Das",      "phone":"seed-p-b10","default_sport":"Cricket","city":"Chennai"}'),
+  ('b0000000-0000-0000-0000-000000000011','seed_p_b11@korum.test', '{"full_name":"Padma Rani",     "phone":"seed-p-b11","default_sport":"Cricket","city":"Chennai"}')
+) as t(id, email, meta)
+on conflict (id) do nothing;
 
-insert into public.users (id, phone, full_name, display_name, default_sport, city, role, reliability_score)
-values
-  -- Team A: Desert Wings CC — Captain + 10 players
-  ('a0000000-0000-0000-0000-000000000001', 'seed-cap-a', 'Arjun Kapoor',    'Arjun K',    'Cricket', 'Chennai', 'captain', 98),
-  ('a0000000-0000-0000-0000-000000000002', 'seed-p-a02', 'Vikram Sharma',   'Vikram S',   'Cricket', 'Chennai', 'player',  95),
-  ('a0000000-0000-0000-0000-000000000003', 'seed-p-a03', 'Rahul Mehta',     'Rahul M',    'Cricket', 'Chennai', 'player',  90),
-  ('a0000000-0000-0000-0000-000000000004', 'seed-p-a04', 'Priya Nair',      'Priya N',    'Cricket', 'Chennai', 'player',  88),
-  ('a0000000-0000-0000-0000-000000000005', 'seed-p-a05', 'Karthik Rajan',   'Karthik R',  'Cricket', 'Chennai', 'player',  75),
-  ('a0000000-0000-0000-0000-000000000006', 'seed-p-a06', 'Sneha Pillai',    'Sneha P',    'Cricket', 'Chennai', 'player',  92),
-  ('a0000000-0000-0000-0000-000000000007', 'seed-p-a07', 'Dev Anand',       'Dev A',      'Cricket', 'Chennai', 'player',  85),
-  ('a0000000-0000-0000-0000-000000000008', 'seed-p-a08', 'Meera Krishnan',  'Meera K',    'Cricket', 'Chennai', 'player',  70),
-  ('a0000000-0000-0000-0000-000000000009', 'seed-p-a09', 'Ravi Sundaram',   'Ravi S',     'Cricket', 'Chennai', 'player',  88),
-  ('a0000000-0000-0000-0000-000000000010', 'seed-p-a10', 'Ananya Iyer',     'Ananya I',   'Cricket', 'Chennai', 'player',  60),
-  ('a0000000-0000-0000-0000-000000000011', 'seed-p-a11', 'Siva Kumar',      'Siva K',     'Cricket', 'Chennai', 'player',  80),
-  -- Team B: Marina Strikers CC — Captain + 10 players
-  ('b0000000-0000-0000-0000-000000000001', 'seed-cap-b', 'Deepa Venkat',    'Deepa V',    'Cricket', 'Chennai', 'captain', 96),
-  ('b0000000-0000-0000-0000-000000000002', 'seed-p-b02', 'Naveen Balaji',   'Naveen B',   'Cricket', 'Chennai', 'player',  82),
-  ('b0000000-0000-0000-0000-000000000003', 'seed-p-b03', 'Lakshmi Devi',    'Lakshmi D',  'Cricket', 'Chennai', 'player',  91),
-  ('b0000000-0000-0000-0000-000000000004', 'seed-p-b04', 'Suresh Babu',     'Suresh B',   'Cricket', 'Chennai', 'player',  77),
-  ('b0000000-0000-0000-0000-000000000005', 'seed-p-b05', 'Kavya Menon',     'Kavya M',    'Cricket', 'Chennai', 'player',  89),
-  ('b0000000-0000-0000-0000-000000000006', 'seed-p-b06', 'Ajay Thomas',     'Ajay T',     'Cricket', 'Chennai', 'player',  73),
-  ('b0000000-0000-0000-0000-000000000007', 'seed-p-b07', 'Nisha Pillai',    'Nisha P',    'Cricket', 'Chennai', 'player',  94),
-  ('b0000000-0000-0000-0000-000000000008', 'seed-p-b08', 'Gopal Krishna',   'Gopal K',    'Cricket', 'Chennai', 'player',  65),
-  ('b0000000-0000-0000-0000-000000000009', 'seed-p-b09', 'Divya Sharma',    'Divya S',    'Cricket', 'Chennai', 'player',  87),
-  ('b0000000-0000-0000-0000-000000000010', 'seed-p-b10', 'Mohan Das',       'Mohan D',    'Cricket', 'Chennai', 'player',  79),
-  ('b0000000-0000-0000-0000-000000000011', 'seed-p-b11', 'Padma Rani',      'Padma R',    'Cricket', 'Chennai', 'player',  84)
-on conflict (phone) do update
-  set full_name = excluded.full_name, display_name = excluded.display_name, updated_at = now();
+-- ── STEP 2: Patch public.users (trigger creates them, we override scores) ──
+update public.users set reliability_score = 98, role = 'captain' where id = 'a0000000-0000-0000-0000-000000000001';
+update public.users set reliability_score = 95 where id = 'a0000000-0000-0000-0000-000000000002';
+update public.users set reliability_score = 90 where id = 'a0000000-0000-0000-0000-000000000003';
+update public.users set reliability_score = 88 where id = 'a0000000-0000-0000-0000-000000000004';
+update public.users set reliability_score = 75 where id = 'a0000000-0000-0000-0000-000000000005';
+update public.users set reliability_score = 92 where id = 'a0000000-0000-0000-0000-000000000006';
+update public.users set reliability_score = 85 where id = 'a0000000-0000-0000-0000-000000000007';
+update public.users set reliability_score = 70 where id = 'a0000000-0000-0000-0000-000000000008';
+update public.users set reliability_score = 88 where id = 'a0000000-0000-0000-0000-000000000009';
+update public.users set reliability_score = 60 where id = 'a0000000-0000-0000-0000-000000000010';
+update public.users set reliability_score = 80 where id = 'a0000000-0000-0000-0000-000000000011';
+update public.users set reliability_score = 96, role = 'captain' where id = 'b0000000-0000-0000-0000-000000000001';
+update public.users set reliability_score = 82 where id = 'b0000000-0000-0000-0000-000000000002';
+update public.users set reliability_score = 91 where id = 'b0000000-0000-0000-0000-000000000003';
+update public.users set reliability_score = 77 where id = 'b0000000-0000-0000-0000-000000000004';
+update public.users set reliability_score = 89 where id = 'b0000000-0000-0000-0000-000000000005';
+update public.users set reliability_score = 73 where id = 'b0000000-0000-0000-0000-000000000006';
+update public.users set reliability_score = 94 where id = 'b0000000-0000-0000-0000-000000000007';
+update public.users set reliability_score = 65 where id = 'b0000000-0000-0000-0000-000000000008';
+update public.users set reliability_score = 87 where id = 'b0000000-0000-0000-0000-000000000009';
+update public.users set reliability_score = 79 where id = 'b0000000-0000-0000-0000-000000000010';
+update public.users set reliability_score = 84 where id = 'b0000000-0000-0000-0000-000000000011';
 
--- ── STEP 2: Create 2 Teams ─────────────────────────────────────────────────
-insert into public.teams (id, name, slug, sport, city, captain_id, invite_code)
-values
-  ('aaaaaaaa-0000-0000-0000-000000000001', 'Desert Wings CC',     'seed-desert-wings-cc',    'Cricket', 'Chennai', 'a0000000-0000-0000-0000-000000000001', 'WINGSCC1'),
-  ('bbbbbbbb-0000-0000-0000-000000000001', 'Marina Strikers CC',  'seed-marina-strikers-cc', 'Cricket', 'Chennai', 'b0000000-0000-0000-0000-000000000001', 'MARINCC1')
+-- ── STEP 3: Teams ──────────────────────────────────────────────────────────
+insert into public.teams (id, name, slug, sport, city, captain_id, invite_code) values
+  ('aaaaaaaa-0000-0000-0000-000000000001','Desert Wings CC',   'seed-desert-wings-cc',  'Cricket','Chennai','a0000000-0000-0000-0000-000000000001','WINGSCC1'),
+  ('bbbbbbbb-0000-0000-0000-000000000001','Marina Strikers CC','seed-marina-strikers-cc','Cricket','Chennai','b0000000-0000-0000-0000-000000000001','MARINCC1')
 on conflict (slug) do nothing;
 
--- ── STEP 3: Add members to teams ──────────────────────────────────────────
-insert into public.memberships (user_id, team_id, role, is_active)
-values
-  -- Desert Wings CC
-  ('a0000000-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000001', 'CAPTAIN', true),
-  ('a0000000-0000-0000-0000-000000000002', 'aaaaaaaa-0000-0000-0000-000000000001', 'PLAYER',  true),
-  ('a0000000-0000-0000-0000-000000000003', 'aaaaaaaa-0000-0000-0000-000000000001', 'PLAYER',  true),
-  ('a0000000-0000-0000-0000-000000000004', 'aaaaaaaa-0000-0000-0000-000000000001', 'PLAYER',  true),
-  ('a0000000-0000-0000-0000-000000000005', 'aaaaaaaa-0000-0000-0000-000000000001', 'PLAYER',  true),
-  ('a0000000-0000-0000-0000-000000000006', 'aaaaaaaa-0000-0000-0000-000000000001', 'PLAYER',  true),
-  ('a0000000-0000-0000-0000-000000000007', 'aaaaaaaa-0000-0000-0000-000000000001', 'PLAYER',  true),
-  ('a0000000-0000-0000-0000-000000000008', 'aaaaaaaa-0000-0000-0000-000000000001', 'PLAYER',  true),
-  ('a0000000-0000-0000-0000-000000000009', 'aaaaaaaa-0000-0000-0000-000000000001', 'PLAYER',  true),
-  ('a0000000-0000-0000-0000-000000000010', 'aaaaaaaa-0000-0000-0000-000000000001', 'PLAYER',  true),
-  ('a0000000-0000-0000-0000-000000000011', 'aaaaaaaa-0000-0000-0000-000000000001', 'PLAYER',  true),
-  -- Marina Strikers CC
-  ('b0000000-0000-0000-0000-000000000001', 'bbbbbbbb-0000-0000-0000-000000000001', 'CAPTAIN', true),
-  ('b0000000-0000-0000-0000-000000000002', 'bbbbbbbb-0000-0000-0000-000000000001', 'PLAYER',  true),
-  ('b0000000-0000-0000-0000-000000000003', 'bbbbbbbb-0000-0000-0000-000000000001', 'PLAYER',  true),
-  ('b0000000-0000-0000-0000-000000000004', 'bbbbbbbb-0000-0000-0000-000000000001', 'PLAYER',  true),
-  ('b0000000-0000-0000-0000-000000000005', 'bbbbbbbb-0000-0000-0000-000000000001', 'PLAYER',  true),
-  ('b0000000-0000-0000-0000-000000000006', 'bbbbbbbb-0000-0000-0000-000000000001', 'PLAYER',  true),
-  ('b0000000-0000-0000-0000-000000000007', 'bbbbbbbb-0000-0000-0000-000000000001', 'PLAYER',  true),
-  ('b0000000-0000-0000-0000-000000000008', 'bbbbbbbb-0000-0000-0000-000000000001', 'PLAYER',  true),
-  ('b0000000-0000-0000-0000-000000000009', 'bbbbbbbb-0000-0000-0000-000000000001', 'PLAYER',  true),
-  ('b0000000-0000-0000-0000-000000000010', 'bbbbbbbb-0000-0000-0000-000000000001', 'PLAYER',  true),
-  ('b0000000-0000-0000-0000-000000000011', 'bbbbbbbb-0000-0000-0000-000000000001', 'PLAYER',  true)
+-- ── STEP 4: Memberships ────────────────────────────────────────────────────
+insert into public.memberships (user_id, team_id, role, is_active) values
+  ('a0000000-0000-0000-0000-000000000001','aaaaaaaa-0000-0000-0000-000000000001','CAPTAIN',true),
+  ('a0000000-0000-0000-0000-000000000002','aaaaaaaa-0000-0000-0000-000000000001','PLAYER', true),
+  ('a0000000-0000-0000-0000-000000000003','aaaaaaaa-0000-0000-0000-000000000001','PLAYER', true),
+  ('a0000000-0000-0000-0000-000000000004','aaaaaaaa-0000-0000-0000-000000000001','PLAYER', true),
+  ('a0000000-0000-0000-0000-000000000005','aaaaaaaa-0000-0000-0000-000000000001','PLAYER', true),
+  ('a0000000-0000-0000-0000-000000000006','aaaaaaaa-0000-0000-0000-000000000001','PLAYER', true),
+  ('a0000000-0000-0000-0000-000000000007','aaaaaaaa-0000-0000-0000-000000000001','PLAYER', true),
+  ('a0000000-0000-0000-0000-000000000008','aaaaaaaa-0000-0000-0000-000000000001','PLAYER', true),
+  ('a0000000-0000-0000-0000-000000000009','aaaaaaaa-0000-0000-0000-000000000001','PLAYER', true),
+  ('a0000000-0000-0000-0000-000000000010','aaaaaaaa-0000-0000-0000-000000000001','PLAYER', true),
+  ('a0000000-0000-0000-0000-000000000011','aaaaaaaa-0000-0000-0000-000000000001','PLAYER', true),
+  ('b0000000-0000-0000-0000-000000000001','bbbbbbbb-0000-0000-0000-000000000001','CAPTAIN',true),
+  ('b0000000-0000-0000-0000-000000000002','bbbbbbbb-0000-0000-0000-000000000001','PLAYER', true),
+  ('b0000000-0000-0000-0000-000000000003','bbbbbbbb-0000-0000-0000-000000000001','PLAYER', true),
+  ('b0000000-0000-0000-0000-000000000004','bbbbbbbb-0000-0000-0000-000000000001','PLAYER', true),
+  ('b0000000-0000-0000-0000-000000000005','bbbbbbbb-0000-0000-0000-000000000001','PLAYER', true),
+  ('b0000000-0000-0000-0000-000000000006','bbbbbbbb-0000-0000-0000-000000000001','PLAYER', true),
+  ('b0000000-0000-0000-0000-000000000007','bbbbbbbb-0000-0000-0000-000000000001','PLAYER', true),
+  ('b0000000-0000-0000-0000-000000000008','bbbbbbbb-0000-0000-0000-000000000001','PLAYER', true),
+  ('b0000000-0000-0000-0000-000000000009','bbbbbbbb-0000-0000-0000-000000000001','PLAYER', true),
+  ('b0000000-0000-0000-0000-000000000010','bbbbbbbb-0000-0000-0000-000000000001','PLAYER', true),
+  ('b0000000-0000-0000-0000-000000000011','bbbbbbbb-0000-0000-0000-000000000001','PLAYER', true)
 on conflict (user_id, team_id) do nothing;
 
--- ── STEP 4: Create the cricket match ──────────────────────────────────────
+-- ── STEP 5: Match ──────────────────────────────────────────────────────────
 insert into public.matches (
-  id, team_id, captain_id, title, sport, venue_name, venue_address,
-  starts_at, payment_due_at, lock_at,
+  id, team_id, captain_id, title, sport,
+  venue_name, venue_address, starts_at, payment_due_at, lock_at,
   squad_size, price_per_player, status, visibility, join_code
-)
-values (
+) values (
   'cccccccc-0000-0000-0000-000000000001',
   'aaaaaaaa-0000-0000-0000-000000000001',
   'a0000000-0000-0000-0000-000000000001',
@@ -111,269 +163,210 @@ values (
   now() + interval '2 days',
   now() + interval '2 days' - interval '3 hours',
   now() + interval '2 days' - interval '1 hour',
-  11,
-  250,
-  'LOCKED',
-  'PUBLIC',
-  'SEEDMATCH1'
-)
-on conflict (id) do nothing;
+  11, 250, 'LOCKED', 'PUBLIC', 'SEEDMATCH1'
+) on conflict (id) do nothing;
 
--- ── STEP 5: Add all 11 Desert Wings players as participants ────────────────
-insert into public.participants (match_id, user_id, status, payment_status, joined_at)
-values
-  ('cccccccc-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000001', 'LOCKED', 'PAID', now() - interval '1 day'),
-  ('cccccccc-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000002', 'LOCKED', 'PAID', now() - interval '23 hours'),
-  ('cccccccc-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000003', 'LOCKED', 'PAID', now() - interval '22 hours'),
-  ('cccccccc-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000004', 'LOCKED', 'PAID', now() - interval '21 hours'),
-  ('cccccccc-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000005', 'LOCKED', 'PAID', now() - interval '20 hours'),
-  ('cccccccc-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000006', 'LOCKED', 'PAID', now() - interval '19 hours'),
-  ('cccccccc-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000007', 'LOCKED', 'PAID', now() - interval '18 hours'),
-  ('cccccccc-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000008', 'LOCKED', 'PAID', now() - interval '17 hours'),
-  ('cccccccc-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000009', 'LOCKED', 'PAID', now() - interval '16 hours'),
-  ('cccccccc-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000010', 'LOCKED', 'PAID', now() - interval '15 hours'),
-  ('cccccccc-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000011', 'LOCKED', 'PAID', now() - interval '14 hours')
+-- ── STEP 6: match_participants (correct table name) ────────────────────────
+-- Note: capacity trigger will fire — insert one by one is fine since squad_size=11
+insert into public.match_participants (match_id, user_id, status, payment_status, joined_at) values
+  ('cccccccc-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000001','LOCKED','PAID',now()-interval'24h'),
+  ('cccccccc-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000002','LOCKED','PAID',now()-interval'23h'),
+  ('cccccccc-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000003','LOCKED','PAID',now()-interval'22h'),
+  ('cccccccc-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000004','LOCKED','PAID',now()-interval'21h'),
+  ('cccccccc-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000005','LOCKED','PAID',now()-interval'20h'),
+  ('cccccccc-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000006','LOCKED','PAID',now()-interval'19h'),
+  ('cccccccc-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000007','LOCKED','PAID',now()-interval'18h'),
+  ('cccccccc-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000008','LOCKED','PAID',now()-interval'17h'),
+  ('cccccccc-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000009','LOCKED','PAID',now()-interval'16h'),
+  ('cccccccc-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000010','LOCKED','PAID',now()-interval'15h'),
+  ('cccccccc-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000011','LOCKED','PAID',now()-interval'14h')
 on conflict (match_id, user_id) do nothing;
 
--- ── STEP 6: Payment records for all 11 players ────────────────────────────
-insert into public.payments (match_id, user_id, amount, currency, status, paid_at)
-values
-  ('cccccccc-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000001', 250, 'INR', 'PAID', now() - interval '1 day'),
-  ('cccccccc-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000002', 250, 'INR', 'PAID', now() - interval '23 hours'),
-  ('cccccccc-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000003', 250, 'INR', 'PAID', now() - interval '22 hours'),
-  ('cccccccc-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000004', 250, 'INR', 'PAID', now() - interval '21 hours'),
-  ('cccccccc-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000005', 250, 'INR', 'PAID', now() - interval '20 hours'),
-  ('cccccccc-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000006', 250, 'INR', 'PAID', now() - interval '19 hours'),
-  ('cccccccc-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000007', 250, 'INR', 'PAID', now() - interval '18 hours'),
-  ('cccccccc-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000008', 250, 'INR', 'PAID', now() - interval '17 hours'),
-  ('cccccccc-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000009', 250, 'INR', 'PAID', now() - interval '16 hours'),
-  ('cccccccc-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000010', 250, 'INR', 'PAID', now() - interval '15 hours'),
-  ('cccccccc-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000011', 250, 'INR', 'PAID', now() - interval '14 hours');
+-- ── STEP 7: payments (requires unique receipt column) ──────────────────────
+insert into public.payments (match_id, user_id, amount, currency, status, receipt, paid_at) values
+  ('cccccccc-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000001',250,'INR','PAID','seed-rcpt-a01',now()-interval'24h'),
+  ('cccccccc-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000002',250,'INR','PAID','seed-rcpt-a02',now()-interval'23h'),
+  ('cccccccc-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000003',250,'INR','PAID','seed-rcpt-a03',now()-interval'22h'),
+  ('cccccccc-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000004',250,'INR','PAID','seed-rcpt-a04',now()-interval'21h'),
+  ('cccccccc-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000005',250,'INR','PAID','seed-rcpt-a05',now()-interval'20h'),
+  ('cccccccc-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000006',250,'INR','PAID','seed-rcpt-a06',now()-interval'19h'),
+  ('cccccccc-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000007',250,'INR','PAID','seed-rcpt-a07',now()-interval'18h'),
+  ('cccccccc-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000008',250,'INR','PAID','seed-rcpt-a08',now()-interval'17h'),
+  ('cccccccc-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000009',250,'INR','PAID','seed-rcpt-a09',now()-interval'16h'),
+  ('cccccccc-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000010',250,'INR','PAID','seed-rcpt-a10',now()-interval'15h'),
+  ('cccccccc-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000011',250,'INR','PAID','seed-rcpt-a11',now()-interval'14h')
+on conflict (match_id, user_id) do nothing;
 
--- ── STEP 7: Strategy notes for the match ──────────────────────────────────
-insert into public.strategy_notes (match_id, author_id, content, is_pinned)
-values
-  ('cccccccc-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000001', '📌 BATTING ORDER: Arjun (1), Vikram (2), Rahul (3), Priya (4), Karthik (5), Sneha (6), Dev (7), Meera (8), Ravi (9), Ananya (10), Siva (11)', true),
-  ('cccccccc-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000001', '🏏 BOWLING PLAN: Siva Kumar opens with swing. Ravi Sundaram first change. Dev Anand and Karthik share spin duties. Target: restrict to under 140.', false),
-  ('cccccccc-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000006', '⚡ Field placements: Extra cover, mid-wicket, deep square leg for their openers. Their #4 likes to pull — set a fine leg.', false)
+-- ── STEP 8: Strategy notes ─────────────────────────────────────────────────
+insert into public.strategy_notes (match_id, author_id, content, is_pinned) values
+  ('cccccccc-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000001',
+   'BATTING ORDER: Arjun (1), Vikram (2), Rahul (3), Priya (4), Karthik (5), Sneha (6), Dev (7), Meera (8), Ravi (9), Ananya (10), Siva (11)', true),
+  ('cccccccc-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000001',
+   'BOWLING PLAN: Siva Kumar opens with swing. Ravi first change. Dev and Karthik share spin duties. Target: restrict under 140.', false),
+  ('cccccccc-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000006',
+   'Field placements: Extra cover, mid-wicket, deep square leg for their openers. Their 4 likes to pull — set a fine leg.', false)
 on conflict do nothing;
 
--- ── STEP 8: Match attendance (simulate post-match) ─────────────────────────
--- 9 attended, 2 no-shows (triggers reliability score update)
-insert into public.match_attendance (match_id, user_id, status, recorded_by)
-values
-  ('cccccccc-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000001', 'ATTENDED',   'a0000000-0000-0000-0000-000000000001'),
-  ('cccccccc-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000002', 'ATTENDED',   'a0000000-0000-0000-0000-000000000001'),
-  ('cccccccc-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000003', 'ATTENDED',   'a0000000-0000-0000-0000-000000000001'),
-  ('cccccccc-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000004', 'ATTENDED',   'a0000000-0000-0000-0000-000000000001'),
-  ('cccccccc-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000005', 'ATTENDED',   'a0000000-0000-0000-0000-000000000001'),
-  ('cccccccc-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000006', 'ATTENDED',   'a0000000-0000-0000-0000-000000000001'),
-  ('cccccccc-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000007', 'ATTENDED',   'a0000000-0000-0000-0000-000000000001'),
-  ('cccccccc-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000008', 'ATTENDED',   'a0000000-0000-0000-0000-000000000001'),
-  ('cccccccc-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000009', 'ATTENDED',   'a0000000-0000-0000-0000-000000000001'),
-  ('cccccccc-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000010', 'NO_SHOW',    'a0000000-0000-0000-0000-000000000001'),
-  ('cccccccc-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000011', 'NO_SHOW',    'a0000000-0000-0000-0000-000000000001')
+-- ── STEP 9: Attendance (9 attended, 2 no-shows) ───────────────────────────
+insert into public.match_attendance (match_id, user_id, status, recorded_by) values
+  ('cccccccc-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000001','ATTENDED','a0000000-0000-0000-0000-000000000001'),
+  ('cccccccc-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000002','ATTENDED','a0000000-0000-0000-0000-000000000001'),
+  ('cccccccc-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000003','ATTENDED','a0000000-0000-0000-0000-000000000001'),
+  ('cccccccc-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000004','ATTENDED','a0000000-0000-0000-0000-000000000001'),
+  ('cccccccc-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000005','ATTENDED','a0000000-0000-0000-0000-000000000001'),
+  ('cccccccc-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000006','ATTENDED','a0000000-0000-0000-0000-000000000001'),
+  ('cccccccc-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000007','ATTENDED','a0000000-0000-0000-0000-000000000001'),
+  ('cccccccc-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000008','ATTENDED','a0000000-0000-0000-0000-000000000001'),
+  ('cccccccc-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000009','ATTENDED','a0000000-0000-0000-0000-000000000001'),
+  ('cccccccc-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000010','NO_SHOW', 'a0000000-0000-0000-0000-000000000001'),
+  ('cccccccc-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000011','NO_SHOW', 'a0000000-0000-0000-0000-000000000001')
 on conflict (match_id, user_id) do nothing;
 
--- ── STEP 9: MOTM votes ─────────────────────────────────────────────────────
--- Vikram Sharma wins MOTM with 4 votes
-insert into public.motm_votes (match_id, voter_id, nominee_id)
-values
-  ('cccccccc-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000002'),  -- Arjun votes Vikram
-  ('cccccccc-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000003', 'a0000000-0000-0000-0000-000000000002'),  -- Rahul votes Vikram
-  ('cccccccc-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000004', 'a0000000-0000-0000-0000-000000000002'),  -- Priya votes Vikram
-  ('cccccccc-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000005', 'a0000000-0000-0000-0000-000000000002'),  -- Karthik votes Vikram
-  ('cccccccc-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000006', 'a0000000-0000-0000-0000-000000000006'),  -- Sneha votes herself (cheeky)
-  ('cccccccc-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000007', 'a0000000-0000-0000-0000-000000000003'),  -- Dev votes Rahul
-  ('cccccccc-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000008', 'a0000000-0000-0000-0000-000000000003'),  -- Meera votes Rahul
-  ('cccccccc-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000009', 'a0000000-0000-0000-0000-000000000002')   -- Ravi votes Vikram
+-- ── STEP 10: MOTM votes (Vikram wins with 4) ─────────────────────────────
+insert into public.motm_votes (match_id, voter_id, nominee_id) values
+  ('cccccccc-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000002'),
+  ('cccccccc-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000003','a0000000-0000-0000-0000-000000000002'),
+  ('cccccccc-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000004','a0000000-0000-0000-0000-000000000002'),
+  ('cccccccc-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000005','a0000000-0000-0000-0000-000000000002'),
+  ('cccccccc-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000006','a0000000-0000-0000-0000-000000000006'),
+  ('cccccccc-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000007','a0000000-0000-0000-0000-000000000003'),
+  ('cccccccc-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000008','a0000000-0000-0000-0000-000000000003'),
+  ('cccccccc-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000009','a0000000-0000-0000-0000-000000000002')
 on conflict (match_id, voter_id) do nothing;
 
--- ── STEP 10: Vendor — SportZone Chennai ────────────────────────────────────
+-- ── STEP 11: Vendor ───────────────────────────────────────────────────────
 insert into public.vendors (
   id, owner_id, name, category, description, city,
   lat, lng, contact_phone, contact_email,
   price_note, sports, is_verified, is_active, gst_number
-)
-values (
+) values (
   'dddddddd-0000-0000-0000-000000000001',
-  'a0000000-0000-0000-0000-000000000001',   -- owned by Arjun (captain doubles as vendor)
-  'SEED: SportZone Chennai',
-  'Kit',
-  'Premium cricket and sports kit supplier. Custom jerseys, equipment, and gear for teams across Chennai. 48hr delivery guaranteed.',
-  'Chennai',
-  13.0827, 80.2707,   -- Chennai coords
-  '+919876543210',
-  'sportzone@example.com',
-  'From ₹350/jersey · Bulk discounts available',
-  array['Cricket','Football','Hockey'],
-  true,
-  true,
-  '33AABCS1429B1ZX'
-)
-on conflict (id) do nothing;
-
--- ── STEP 11: Vendor products ────────────────────────────────────────────────
-insert into public.vendor_products (
-  id, vendor_id, name, description, category,
-  price, unit, min_qty, stock, sport_tags, image_urls, is_active
-)
-values
-  (
-    'eeeeeeee-0000-0000-0000-000000000001',
-    'dddddddd-0000-0000-0000-000000000001',
-    'Custom Cricket Jersey (sublimation print)',
-    'Full-sublimation polyester jersey with team name, numbers, and sponsor logo. Available in all sizes. 5-day delivery for bulk orders.',
-    'Kit', 450, 'item', 11, 200,
-    array['Cricket'], array[], true
-  ),
-  (
-    'eeeeeeee-0000-0000-0000-000000000002',
-    'dddddddd-0000-0000-0000-000000000001',
-    'SG Club Cricket Ball (red, pack of 6)',
-    'SG Club leather balls. Official weight and seam. Perfect for matches. 1-year warranty.',
-    'Equipment', 1800, 'set', 1, 50,
-    array['Cricket'], array[], true
-  ),
-  (
-    'eeeeeeee-0000-0000-0000-000000000003',
-    'dddddddd-0000-0000-0000-000000000001',
-    'Match Day Hydration Pack (team of 11)',
-    'Energy drinks, water bottles, electrolyte sachets — full hydration bundle for 11 players. Ice-packed delivery.',
-    'Food', 850, 'set', 1, 30,
-    array['Cricket','Football','Hockey'], array[], true
-  ),
-  (
-    'eeeeeeee-0000-0000-0000-000000000004',
-    'dddddddd-0000-0000-0000-000000000001',
-    'Cricket Ground Marking Kit',
-    'Boundary rope (75m), crease whitener, stumps (3 sets), bails. Complete ground setup kit.',
-    'Equipment', 2200, 'set', 1, 15,
-    array['Cricket'], array[], true
-  )
-on conflict (id) do nothing;
-
--- ── STEP 12: Team procurement list with items + votes + contributions ───────
-insert into public.procurement_lists (id, team_id, title, created_by, status)
-values (
-  'ffffffff-0000-0000-0000-000000000001',
-  'aaaaaaaa-0000-0000-0000-000000000001',
-  'Match Day Kit & Supplies — Desert Wings CC',
   'a0000000-0000-0000-0000-000000000001',
-  'OPEN'
-)
+  'SEED: SportZone Chennai', 'Kit',
+  'Premium cricket and sports kit. Custom jerseys, equipment, gear. 48hr delivery guaranteed.',
+  'Chennai', 13.0827, 80.2707,
+  '+919876543210', 'sportzone@example.com',
+  'From Rs.350/jersey, bulk discounts',
+  array['Cricket','Football','Hockey'],
+  true, true, '33AABCS1429B1ZX'
+) on conflict (id) do nothing;
+
+-- ── STEP 12: Vendor products ──────────────────────────────────────────────
+insert into public.vendor_products (id, vendor_id, name, description, category, price, unit, min_qty, stock, sport_tags, image_urls, is_active) values
+  ('eeeeeeee-0000-0000-0000-000000000001','dddddddd-0000-0000-0000-000000000001',
+   'Custom Cricket Jersey (sublimation print)',
+   'Full-sublimation polyester. Team name, numbers, sponsor logo. All sizes. 5-day bulk delivery.',
+   'Kit', 450, 'item', 11, 200, array['Cricket'], array[]::text[], true),
+  ('eeeeeeee-0000-0000-0000-000000000002','dddddddd-0000-0000-0000-000000000001',
+   'SG Club Cricket Ball (red, pack of 6)',
+   'SG Club leather balls. Official weight and seam. 1-year warranty.',
+   'Equipment', 1800, 'set', 1, 50, array['Cricket'], array[]::text[], true),
+  ('eeeeeeee-0000-0000-0000-000000000003','dddddddd-0000-0000-0000-000000000001',
+   'Match Day Hydration Pack (team of 11)',
+   'Energy drinks, water bottles, electrolyte sachets for 11 players. Ice-packed delivery.',
+   'Food', 850, 'set', 1, 30, array['Cricket','Football'], array[]::text[], true),
+  ('eeeeeeee-0000-0000-0000-000000000004','dddddddd-0000-0000-0000-000000000001',
+   'Cricket Ground Marking Kit',
+   'Boundary rope 75m, crease whitener, stumps 3 sets, bails. Complete setup.',
+   'Equipment', 2200, 'set', 1, 15, array['Cricket'], array[]::text[], true)
 on conflict (id) do nothing;
 
-insert into public.procurement_items (id, list_id, vendor_id, product_id, name, estimated_cost, target_amount, collected_amount, created_by)
-values
-  -- Jerseys for the full squad
-  ('f1f1f1f1-0000-0000-0000-000000000001',
-   'ffffffff-0000-0000-0000-000000000001',
-   'dddddddd-0000-0000-0000-000000000001',
-   'eeeeeeee-0000-0000-0000-000000000001',
-   'Custom jerseys × 11 (Desert Wings CC)', 4950, 4950, 3500,
-   'a0000000-0000-0000-0000-000000000001'),
-  -- Match balls
-  ('f2f2f2f2-0000-0000-0000-000000000002',
-   'ffffffff-0000-0000-0000-000000000001',
-   'dddddddd-0000-0000-0000-000000000001',
-   'eeeeeeee-0000-0000-0000-000000000002',
-   'SG Club Balls (6-pack)', 1800, 1800, 1800,
-   'a0000000-0000-0000-0000-000000000001'),
-  -- Hydration pack
-  ('f3f3f3f3-0000-0000-0000-000000000003',
-   'ffffffff-0000-0000-0000-000000000001',
-   'dddddddd-0000-0000-0000-000000000001',
-   'eeeeeeee-0000-0000-0000-000000000003',
-   'Match Day Hydration Pack', 850, 850, 400,
-   'a0000000-0000-0000-0000-000000000001')
+-- ── STEP 13: Procurement list ─────────────────────────────────────────────
+insert into public.procurement_lists (id, team_id, title, created_by, status) values
+  ('ffffffff-0000-0000-0000-000000000001',
+   'aaaaaaaa-0000-0000-0000-000000000001',
+   'Match Day Kit & Supplies - Desert Wings CC',
+   'a0000000-0000-0000-0000-000000000001', 'OPEN')
 on conflict (id) do nothing;
 
--- Votes on items
-insert into public.procurement_votes (item_id, user_id, vote)
-values
-  -- Jerseys — 9 NEEDED, 2 NOT_NEEDED
-  ('f1f1f1f1-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000001', 'NEEDED'),
-  ('f1f1f1f1-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000002', 'NEEDED'),
-  ('f1f1f1f1-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000003', 'NEEDED'),
-  ('f1f1f1f1-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000004', 'NEEDED'),
-  ('f1f1f1f1-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000005', 'NEEDED'),
-  ('f1f1f1f1-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000006', 'NEEDED'),
-  ('f1f1f1f1-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000007', 'NEEDED'),
-  ('f1f1f1f1-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000008', 'NEEDED'),
-  ('f1f1f1f1-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000009', 'NEEDED'),
-  ('f1f1f1f1-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000010', 'NOT_NEEDED'),
-  ('f1f1f1f1-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000011', 'NOT_NEEDED'),
-  -- Balls — unanimous NEEDED
-  ('f2f2f2f2-0000-0000-0000-000000000002', 'a0000000-0000-0000-0000-000000000001', 'NEEDED'),
-  ('f2f2f2f2-0000-0000-0000-000000000002', 'a0000000-0000-0000-0000-000000000002', 'NEEDED'),
-  ('f2f2f2f2-0000-0000-0000-000000000002', 'a0000000-0000-0000-0000-000000000003', 'NEEDED'),
-  ('f2f2f2f2-0000-0000-0000-000000000002', 'a0000000-0000-0000-0000-000000000004', 'NEEDED'),
-  ('f2f2f2f2-0000-0000-0000-000000000002', 'a0000000-0000-0000-0000-000000000005', 'NEEDED'),
-  -- Hydration — mixed votes
-  ('f3f3f3f3-0000-0000-0000-000000000003', 'a0000000-0000-0000-0000-000000000001', 'NEEDED'),
-  ('f3f3f3f3-0000-0000-0000-000000000003', 'a0000000-0000-0000-0000-000000000002', 'NEEDED'),
-  ('f3f3f3f3-0000-0000-0000-000000000003', 'a0000000-0000-0000-0000-000000000003', 'NEEDED'),
-  ('f3f3f3f3-0000-0000-0000-000000000003', 'a0000000-0000-0000-0000-000000000004', 'NOT_NEEDED'),
-  ('f3f3f3f3-0000-0000-0000-000000000003', 'a0000000-0000-0000-0000-000000000005', 'NOT_NEEDED')
+insert into public.procurement_items (id, list_id, vendor_id, product_id, name, estimated_cost, target_amount, collected_amount, created_by) values
+  ('f1f1f1f1-0000-0000-0000-000000000001','ffffffff-0000-0000-0000-000000000001',
+   'dddddddd-0000-0000-0000-000000000001','eeeeeeee-0000-0000-0000-000000000001',
+   'Custom jerseys x 11', 4950, 4950, 3500, 'a0000000-0000-0000-0000-000000000001'),
+  ('f2f2f2f2-0000-0000-0000-000000000002','ffffffff-0000-0000-0000-000000000001',
+   'dddddddd-0000-0000-0000-000000000001','eeeeeeee-0000-0000-0000-000000000002',
+   'SG Club Balls (6-pack)', 1800, 1800, 1800, 'a0000000-0000-0000-0000-000000000001'),
+  ('f3f3f3f3-0000-0000-0000-000000000003','ffffffff-0000-0000-0000-000000000001',
+   'dddddddd-0000-0000-0000-000000000001','eeeeeeee-0000-0000-0000-000000000003',
+   'Match Day Hydration Pack', 850, 850, 400, 'a0000000-0000-0000-0000-000000000001')
+on conflict (id) do nothing;
+
+-- Votes
+insert into public.procurement_votes (item_id, user_id, vote) values
+  ('f1f1f1f1-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000001','NEEDED'),
+  ('f1f1f1f1-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000002','NEEDED'),
+  ('f1f1f1f1-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000003','NEEDED'),
+  ('f1f1f1f1-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000004','NEEDED'),
+  ('f1f1f1f1-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000005','NEEDED'),
+  ('f1f1f1f1-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000006','NEEDED'),
+  ('f1f1f1f1-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000007','NEEDED'),
+  ('f1f1f1f1-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000008','NEEDED'),
+  ('f1f1f1f1-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000009','NEEDED'),
+  ('f1f1f1f1-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000010','NOT_NEEDED'),
+  ('f1f1f1f1-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000011','NOT_NEEDED'),
+  ('f2f2f2f2-0000-0000-0000-000000000002','a0000000-0000-0000-0000-000000000001','NEEDED'),
+  ('f2f2f2f2-0000-0000-0000-000000000002','a0000000-0000-0000-0000-000000000002','NEEDED'),
+  ('f2f2f2f2-0000-0000-0000-000000000002','a0000000-0000-0000-0000-000000000003','NEEDED'),
+  ('f2f2f2f2-0000-0000-0000-000000000002','a0000000-0000-0000-0000-000000000004','NEEDED'),
+  ('f2f2f2f2-0000-0000-0000-000000000002','a0000000-0000-0000-0000-000000000005','NEEDED'),
+  ('f3f3f3f3-0000-0000-0000-000000000003','a0000000-0000-0000-0000-000000000001','NEEDED'),
+  ('f3f3f3f3-0000-0000-0000-000000000003','a0000000-0000-0000-0000-000000000002','NEEDED'),
+  ('f3f3f3f3-0000-0000-0000-000000000003','a0000000-0000-0000-0000-000000000003','NEEDED'),
+  ('f3f3f3f3-0000-0000-0000-000000000003','a0000000-0000-0000-0000-000000000004','NOT_NEEDED'),
+  ('f3f3f3f3-0000-0000-0000-000000000003','a0000000-0000-0000-0000-000000000005','NOT_NEEDED')
 on conflict (item_id, user_id) do nothing;
 
 -- Contributions (money pooled)
-insert into public.procurement_contributions (item_id, user_id, amount, note)
-values
-  -- Jersey fund: ₹3500 of ₹4950 collected
-  ('f1f1f1f1-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000001', 500, 'Captain contribution'),
-  ('f1f1f1f1-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000002', 450, null),
-  ('f1f1f1f1-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000003', 450, null),
-  ('f1f1f1f1-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000004', 450, null),
-  ('f1f1f1f1-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000005', 450, null),
-  ('f1f1f1f1-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000006', 450, null),
-  ('f1f1f1f1-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000007', 350, 'Will pay rest at ground'),
-  ('f1f1f1f1-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000008', 400, null),
-  -- Balls: fully funded ₹1800
-  ('f2f2f2f2-0000-0000-0000-000000000002', 'a0000000-0000-0000-0000-000000000001', 600, 'Captain covers 1/3'),
-  ('f2f2f2f2-0000-0000-0000-000000000002', 'a0000000-0000-0000-0000-000000000002', 600, null),
-  ('f2f2f2f2-0000-0000-0000-000000000002', 'a0000000-0000-0000-0000-000000000003', 600, null),
-  -- Hydration: partial ₹400 of ₹850
-  ('f3f3f3f3-0000-0000-0000-000000000003', 'a0000000-0000-0000-0000-000000000001', 200, null),
-  ('f3f3f3f3-0000-0000-0000-000000000003', 'a0000000-0000-0000-0000-000000000002', 200, null);
+insert into public.procurement_contributions (item_id, user_id, amount, note) values
+  ('f1f1f1f1-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000001',500,'Captain contribution'),
+  ('f1f1f1f1-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000002',450,null),
+  ('f1f1f1f1-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000003',450,null),
+  ('f1f1f1f1-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000004',450,null),
+  ('f1f1f1f1-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000005',450,null),
+  ('f1f1f1f1-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000006',450,null),
+  ('f1f1f1f1-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000007',350,'Will pay rest at ground'),
+  ('f1f1f1f1-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000008',400,null),
+  ('f2f2f2f2-0000-0000-0000-000000000002','a0000000-0000-0000-0000-000000000001',600,'Captain covers 1/3'),
+  ('f2f2f2f2-0000-0000-0000-000000000002','a0000000-0000-0000-0000-000000000002',600,null),
+  ('f2f2f2f2-0000-0000-0000-000000000002','a0000000-0000-0000-0000-000000000003',600,null),
+  ('f3f3f3f3-0000-0000-0000-000000000003','a0000000-0000-0000-0000-000000000001',200,null),
+  ('f3f3f3f3-0000-0000-0000-000000000003','a0000000-0000-0000-0000-000000000002',200,null);
 
--- ── STEP 13: Availability check from captain ───────────────────────────────
+-- ── STEP 14: Availability check ───────────────────────────────────────────
 insert into public.availability_checks (
   id, team_id, captain_id, match_date, match_time, venue_hint, note, expires_at
-)
-values (
+) values (
   'a1a1a1a1-0000-0000-0000-000000000001',
   'aaaaaaaa-0000-0000-0000-000000000001',
   'a0000000-0000-0000-0000-000000000001',
-  (now() + interval '7 days')::date,
-  '07:00',
+  (now() + interval '7 days')::date, '07:00',
   'MA Chidambaram Annex',
-  'Next league match — need full squad. Mark your availability ASAP!',
+  'Next league match — need full squad. Mark ASAP!',
   now() + interval '5 days'
-)
-on conflict (id) do nothing;
+) on conflict (id) do nothing;
 
--- Some responses to the availability check
-insert into public.availability_responses (check_id, user_id, response, responded_at)
-values
-  ('a1a1a1a1-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000002', 'AVAILABLE',   now()),
-  ('a1a1a1a1-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000003', 'AVAILABLE',   now()),
-  ('a1a1a1a1-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000004', 'MAYBE',       now()),
-  ('a1a1a1a1-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000005', 'UNAVAILABLE', now()),
-  ('a1a1a1a1-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000006', 'AVAILABLE',   now()),
-  ('a1a1a1a1-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000007', 'AVAILABLE',   now())
+insert into public.availability_responses (check_id, user_id, response, responded_at) values
+  ('a1a1a1a1-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000002','AVAILABLE',  now()),
+  ('a1a1a1a1-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000003','AVAILABLE',  now()),
+  ('a1a1a1a1-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000004','MAYBE',      now()),
+  ('a1a1a1a1-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000005','UNAVAILABLE',now()),
+  ('a1a1a1a1-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000006','AVAILABLE',  now()),
+  ('a1a1a1a1-0000-0000-0000-000000000001','a0000000-0000-0000-0000-000000000007','AVAILABLE',  now())
 on conflict (check_id, user_id) do nothing;
 
--- ── FINAL: Report what was created ────────────────────────────────────────
-select 'SEED COMPLETE' as status,
-  (select count(*) from public.users         where phone like 'seed-%')           as users_created,
-  (select count(*) from public.teams         where slug  like 'seed-%')           as teams_created,
+-- ── FINAL REPORT ──────────────────────────────────────────────────────────
+select
+  'SEED COMPLETE' as status,
+  (select count(*) from auth.users           where email like '%@korum.test')  as auth_users,
+  (select count(*) from public.users         where phone like 'seed-%')         as public_users,
+  (select count(*) from public.teams         where slug  like 'seed-%')         as teams,
   (select count(*) from public.memberships   where team_id = 'aaaaaaaa-0000-0000-0000-000000000001') as team_a_members,
-  (select count(*) from public.participants  where match_id = 'cccccccc-0000-0000-0000-000000000001') as match_participants,
+  (select count(*) from public.match_participants where match_id = 'cccccccc-0000-0000-0000-000000000001') as participants,
   (select count(*) from public.payments      where match_id = 'cccccccc-0000-0000-0000-000000000001') as payments,
-  (select count(*) from public.match_attendance where match_id = 'cccccccc-0000-0000-0000-000000000001') as attendance_records,
+  (select sum(amount) from public.payments   where match_id = 'cccccccc-0000-0000-0000-000000000001') as match_fees_collected_inr,
   (select count(*) from public.motm_votes    where match_id = 'cccccccc-0000-0000-0000-000000000001') as motm_votes,
-  (select count(*) from public.vendor_products where vendor_id = 'dddddddd-0000-0000-0000-000000000001') as products,
-  (select count(*) from public.procurement_contributions where item_id in ('f1f1f1f1-0000-0000-0000-000000000001','f2f2f2f2-0000-0000-0000-000000000002','f3f3f3f3-0000-0000-0000-000000000003')) as contributions,
-  (select coalesce(sum(amount),0) from public.procurement_contributions where item_id in ('f1f1f1f1-0000-0000-0000-000000000001','f2f2f2f2-0000-0000-0000-000000000002','f3f3f3f3-0000-0000-0000-000000000003')) as total_pooled_inr;
+  (select count(*) from public.vendor_products where vendor_id = 'dddddddd-0000-0000-0000-000000000001') as vendor_products,
+  (select sum(amount) from public.procurement_contributions where item_id in (
+    'f1f1f1f1-0000-0000-0000-000000000001',
+    'f2f2f2f2-0000-0000-0000-000000000002',
+    'f3f3f3f3-0000-0000-0000-000000000003')) as total_pooled_inr;
