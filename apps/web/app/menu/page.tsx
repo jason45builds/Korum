@@ -9,8 +9,10 @@ const MENU_ITEMS = [
   { icon: "🔗", label: "Join Match",      href: "/match/join",    primary: false },
   { icon: "🏟️", label: "My Teams",       href: "/teams",         primary: false },
   { icon: "📅", label: "My Matches",      href: "/matches",       primary: false },
-  { icon: "📋", label: "Availability",    href: "/availability",  primary: false },
-  { icon: "👥", label: "Invite Friends",  href: "/invite",        primary: false },
+  { icon: "📋", label: "Availability",     href: "/availability",     primary: false },
+  { icon: "🏪", label: "Marketplace",      href: "/marketplace",      primary: false },
+  { icon: "🏦", label: "Vendor Dashboard", href: "/vendor/dashboard", primary: false },
+  { icon: "👥", label: "Invite Friends",   href: "/invite",           primary: false },
   { icon: "❓", label: "Help & FAQs",     href: "/help",          primary: false },
 ];
 

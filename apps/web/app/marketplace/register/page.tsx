@@ -12,11 +12,11 @@ const VENDOR_CATEGORIES = ["Kit","Equipment","Food","Photography","Physio","Tran
 const SURFACES = ["Turf","Concrete","Grass","Clay","Indoor"];
 const AMENITIES_LIST = ["Floodlights","Parking","Washrooms","Changing rooms","Canteen","First aid","Scoreboard","Seating"];
 
-const chipStyle = (active: boolean, activeColor = "var(--blue)", activeSoft = "var(--blue-soft)", activeBorder = "var(--blue)"): React.CSSProperties => ({
+const chip = (active: boolean, ac = "var(--blue)", as_ = "var(--blue-soft)", ab = "var(--blue)"): React.CSSProperties => ({
   padding: "5px 12px", borderRadius: "var(--r-full)", border: "1.5px solid",
-  borderColor: active ? activeBorder : "var(--line)",
-  background: active ? activeSoft : "var(--surface)",
-  color: active ? activeColor : "var(--text-3)",
+  borderColor: active ? ab : "var(--line)",
+  background: active ? as_ : "var(--surface)",
+  color: active ? ac : "var(--text-3)",
   fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 12, cursor: "pointer",
 });
 
@@ -26,56 +26,56 @@ function RegisterContent() {
   const type = (searchParams.get("type") ?? "vendor") as "vendor" | "ground";
   const { isAuthenticated, loading: authLoading } = useAuth();
 
-  const [saving, setSaving] = useState(false);
-  const [saved,  setSaved]  = useState(false);
-  const [err,    setErr]    = useState<string | null>(null);
+  const [saving,   setSaving]  = useState(false);
+  const [saved,    setSaved]   = useState(false);
+  const [err,      setErr]     = useState<string | null>(null);
+  const [locating, setLocating] = useState(false);
 
   const [vForm, setVForm] = useState({
     name: "", category: "Kit", description: "", city: "",
     contactPhone: "", contactEmail: "", website: "", priceNote: "",
-    sports: [] as string[],
+    gstNumber: "", sports: [] as string[], lat: "", lng: "",
   });
   const [gForm, setGForm] = useState({
     name: "", address: "", city: "", state: "",
     pricePerHour: "", capacity: "", surface: "Turf",
     amenities: [] as string[], contactPhone: "", contactEmail: "",
-    sports: [] as string[],
+    sports: [] as string[], lat: "", lng: "",
   });
 
-  const toggleVSport = (s: string) =>
-    setVForm(f => ({ ...f, sports: f.sports.includes(s) ? f.sports.filter(x => x !== s) : [...f.sports, s] }));
+  const getLocation = () => {
+    if (!navigator.geolocation) return;
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      pos => {
+        const lat = pos.coords.latitude.toFixed(6);
+        const lng = pos.coords.longitude.toFixed(6);
+        if (type === "vendor") setVForm(f => ({ ...f, lat, lng }));
+        else setGForm(f => ({ ...f, lat, lng }));
+        setLocating(false);
+      },
+      () => setLocating(false),
+      { timeout: 8000 }
+    );
+  };
 
-  const toggleGSport = (s: string) =>
-    setGForm(f => ({ ...f, sports: f.sports.includes(s) ? f.sports.filter(x => x !== s) : [...f.sports, s] }));
-
-  const toggleAmenity = (a: string) =>
-    setGForm(f => ({ ...f, amenities: f.amenities.includes(a) ? f.amenities.filter(x => x !== a) : [...f.amenities, a] }));
+  const toggleVSport  = (s: string) => setVForm(f => ({ ...f, sports: f.sports.includes(s) ? f.sports.filter(x => x !== s) : [...f.sports, s] }));
+  const toggleGSport  = (s: string) => setGForm(f => ({ ...f, sports: f.sports.includes(s) ? f.sports.filter(x => x !== s) : [...f.sports, s] }));
+  const toggleAmenity = (a: string) => setGForm(f => ({ ...f, amenities: f.amenities.includes(a) ? f.amenities.filter(x => x !== a) : [...f.amenities, a] }));
 
   const handleSubmit = async () => {
     setSaving(true); setErr(null);
     try {
       const endpoint = type === "vendor" ? "/api/vendors" : "/api/grounds";
       const body = type === "vendor"
-        ? { ...vForm }
-        : {
-            ...gForm,
-            pricePerHour: gForm.pricePerHour ? Number(gForm.pricePerHour) : null,
-            capacity:     gForm.capacity     ? Number(gForm.capacity)     : null,
-            sport:        gForm.sports,
-          };
-      const res = await fetch(endpoint, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        credentials: "same-origin", body: JSON.stringify(body),
-      });
-      if (!res.ok) {
-        const d = await res.json() as { error?: string };
-        throw new Error(d.error ?? "Failed");
-      }
+        ? { ...vForm, lat: vForm.lat ? Number(vForm.lat) : null, lng: vForm.lng ? Number(vForm.lng) : null, gst_number: vForm.gstNumber || null }
+        : { ...gForm, pricePerHour: gForm.pricePerHour ? Number(gForm.pricePerHour) : null, capacity: gForm.capacity ? Number(gForm.capacity) : null, sport: gForm.sports, lat: gForm.lat ? Number(gForm.lat) : null, lng: gForm.lng ? Number(gForm.lng) : null };
+      const res = await fetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "same-origin", body: JSON.stringify(body) });
+      if (!res.ok) { const d = await res.json() as { error?: string }; throw new Error(d.error ?? "Failed"); }
       setSaved(true);
       setTimeout(() => router.push("/marketplace"), 1500);
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : "Failed");
-    } finally { setSaving(false); }
+    } catch (e) { setErr(e instanceof Error ? e.message : "Failed"); }
+    finally { setSaving(false); }
   };
 
   if (authLoading) return <main><Loader label="Loading…" /></main>;
@@ -93,6 +93,25 @@ function RegisterContent() {
     );
   }
 
+  // ── Shared location picker ──────────────────────────────────────────────────
+  const currentLat = type === "vendor" ? vForm.lat : gForm.lat;
+  const LocationPicker = (
+    <div className="field">
+      <label className="field-label">
+        Location <span style={{ fontWeight: 400, color: "var(--text-4)" }}>(for nearby search)</span>
+      </label>
+      <div style={{ display: "flex", gap: 8 }}>
+        <input className="input" style={{ flex: 1 }} placeholder="Latitude"  value={currentLat} readOnly />
+        <input className="input" style={{ flex: 1 }} placeholder="Longitude" value={type === "vendor" ? vForm.lng : gForm.lng} readOnly />
+        <button type="button" onClick={getLocation} disabled={locating}
+          style={{ padding: "0 12px", border: "1.5px solid var(--blue-border)", borderRadius: "var(--r-md)", background: "var(--blue-soft)", color: "var(--blue)", fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 13, cursor: "pointer", whiteSpace: "nowrap" }}>
+          {locating ? "…" : "📍 Me"}
+        </button>
+      </div>
+      {currentLat && <p className="t-caption" style={{ marginTop: 4, color: "var(--green)" }}>✅ Location set — you&apos;ll appear in nearby searches</p>}
+    </div>
+  );
+
   return (
     <main>
       <div className="page">
@@ -100,174 +119,104 @@ function RegisterContent() {
           <p className="t-caption" style={{ color: "var(--blue)" }}>Marketplace</p>
           <h1 className="t-h2">{type === "vendor" ? "Register your Business" : "List your Ground"}</h1>
           <p className="t-caption" style={{ marginTop: 4, color: "var(--text-3)" }}>
-            {type === "vendor"
-              ? "Reach sports teams in your city. Kit, equipment, food, physio and more."
-              : "Make your venue discoverable to local teams."}
+            {type === "vendor" ? "Reach sports teams in your city." : "Make your venue discoverable to local teams."}
           </p>
         </div>
 
         <div className="card card-pad">
           <div className="form-stack">
-
             {type === "vendor" ? (
               <>
-                <div className="field">
-                  <label className="field-label">Business name *</label>
-                  <input className="input" value={vForm.name} placeholder="Sports Hub Chennai"
-                    onChange={e => setVForm(f => ({ ...f, name: e.target.value }))} />
-                </div>
+                <div className="field"><label className="field-label">Business name *</label>
+                  <input className="input" value={vForm.name} placeholder="Sports Hub Chennai" onChange={e => setVForm(f => ({ ...f, name: e.target.value }))} /></div>
 
-                <div className="field">
-                  <label className="field-label">Category *</label>
-                  <select className="select" value={vForm.category}
-                    onChange={e => setVForm(f => ({ ...f, category: e.target.value }))}>
+                <div className="field"><label className="field-label">Category *</label>
+                  <select className="select" value={vForm.category} onChange={e => setVForm(f => ({ ...f, category: e.target.value }))}>
                     {VENDOR_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-                  </select>
-                </div>
+                  </select></div>
 
-                <div className="field">
-                  <label className="field-label">City *</label>
-                  <input className="input" value={vForm.city} placeholder="Chennai"
-                    onChange={e => setVForm(f => ({ ...f, city: e.target.value }))} />
-                </div>
+                <div className="field"><label className="field-label">City *</label>
+                  <input className="input" value={vForm.city} placeholder="Chennai" onChange={e => setVForm(f => ({ ...f, city: e.target.value }))} /></div>
 
-                <div className="field">
-                  <label className="field-label">Description</label>
-                  <textarea className="input" style={{ minHeight: 80 }} value={vForm.description}
-                    placeholder="What you offer, turnaround time, delivery…"
-                    onChange={e => setVForm(f => ({ ...f, description: e.target.value }))} />
-                </div>
+                <div className="field"><label className="field-label">Description</label>
+                  <textarea className="input" style={{ minHeight: 80 }} value={vForm.description} placeholder="What you offer, turnaround time, delivery…" onChange={e => setVForm(f => ({ ...f, description: e.target.value }))} /></div>
 
-                <div className="field">
-                  <label className="field-label">Pricing note</label>
-                  <input className="input" value={vForm.priceNote} placeholder="₹500/kit · Custom quote available"
-                    onChange={e => setVForm(f => ({ ...f, priceNote: e.target.value }))} />
-                </div>
+                <div className="field"><label className="field-label">Pricing note</label>
+                  <input className="input" value={vForm.priceNote} placeholder="₹500/kit · Custom quote" onChange={e => setVForm(f => ({ ...f, priceNote: e.target.value }))} /></div>
 
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                  <div className="field">
-                    <label className="field-label">Phone</label>
-                    <input className="input" type="tel" value={vForm.contactPhone}
-                      onChange={e => setVForm(f => ({ ...f, contactPhone: e.target.value }))} />
-                  </div>
-                  <div className="field">
-                    <label className="field-label">Email</label>
-                    <input className="input" type="email" value={vForm.contactEmail}
-                      onChange={e => setVForm(f => ({ ...f, contactEmail: e.target.value }))} />
-                  </div>
+                  <div className="field"><label className="field-label">Phone</label>
+                    <input className="input" type="tel" value={vForm.contactPhone} onChange={e => setVForm(f => ({ ...f, contactPhone: e.target.value }))} /></div>
+                  <div className="field"><label className="field-label">Email</label>
+                    <input className="input" type="email" value={vForm.contactEmail} onChange={e => setVForm(f => ({ ...f, contactEmail: e.target.value }))} /></div>
                 </div>
 
                 <div className="field">
-                  <label className="field-label">Sports you serve</label>
+                  <label className="field-label">GST Number <span style={{ fontWeight: 400, color: "var(--text-4)" }}>(optional — for verification badge)</span></label>
+                  <input className="input" value={vForm.gstNumber} placeholder="22AAAAA0000A1Z5" onChange={e => setVForm(f => ({ ...f, gstNumber: e.target.value }))} />
+                </div>
+
+                {LocationPicker}
+
+                <div className="field"><label className="field-label">Sports you serve</label>
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 4 }}>
                     {SPORT_OPTIONS.slice(0, 10).map(s => (
-                      <button key={s} type="button"
-                        onClick={() => toggleVSport(s)}
-                        style={chipStyle(vForm.sports.includes(s))}>
-                        {s}
-                      </button>
+                      <button key={s} type="button" onClick={() => toggleVSport(s)} style={chip(vForm.sports.includes(s))}>{s}</button>
                     ))}
                   </div>
                 </div>
               </>
             ) : (
               <>
-                <div className="field">
-                  <label className="field-label">Ground name *</label>
-                  <input className="input" value={gForm.name} placeholder="Marina Cricket Ground"
-                    onChange={e => setGForm(f => ({ ...f, name: e.target.value }))} />
-                </div>
+                <div className="field"><label className="field-label">Ground name *</label>
+                  <input className="input" value={gForm.name} placeholder="Marina Cricket Ground" onChange={e => setGForm(f => ({ ...f, name: e.target.value }))} /></div>
 
-                <div className="field">
-                  <label className="field-label">Address *</label>
-                  <input className="input" value={gForm.address} placeholder="123 Beach Road"
-                    onChange={e => setGForm(f => ({ ...f, address: e.target.value }))} />
+                <div className="field"><label className="field-label">Address *</label>
+                  <input className="input" value={gForm.address} placeholder="123 Beach Road" onChange={e => setGForm(f => ({ ...f, address: e.target.value }))} /></div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                  <div className="field"><label className="field-label">City *</label>
+                    <input className="input" value={gForm.city} placeholder="Chennai" onChange={e => setGForm(f => ({ ...f, city: e.target.value }))} /></div>
+                  <div className="field"><label className="field-label">State</label>
+                    <input className="input" value={gForm.state} placeholder="Tamil Nadu" onChange={e => setGForm(f => ({ ...f, state: e.target.value }))} /></div>
                 </div>
 
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                  <div className="field">
-                    <label className="field-label">City *</label>
-                    <input className="input" value={gForm.city} placeholder="Chennai"
-                      onChange={e => setGForm(f => ({ ...f, city: e.target.value }))} />
-                  </div>
-                  <div className="field">
-                    <label className="field-label">State</label>
-                    <input className="input" value={gForm.state} placeholder="Tamil Nadu"
-                      onChange={e => setGForm(f => ({ ...f, state: e.target.value }))} />
-                  </div>
+                  <div className="field"><label className="field-label">Price per hour (₹)</label>
+                    <input className="input" type="number" value={gForm.pricePerHour} placeholder="500" onChange={e => setGForm(f => ({ ...f, pricePerHour: e.target.value }))} /></div>
+                  <div className="field"><label className="field-label">Capacity</label>
+                    <input className="input" type="number" value={gForm.capacity} placeholder="22" onChange={e => setGForm(f => ({ ...f, capacity: e.target.value }))} /></div>
                 </div>
 
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                  <div className="field">
-                    <label className="field-label">Price per hour (₹)</label>
-                    <input className="input" type="number" value={gForm.pricePerHour} placeholder="500"
-                      onChange={e => setGForm(f => ({ ...f, pricePerHour: e.target.value }))} />
-                  </div>
-                  <div className="field">
-                    <label className="field-label">Capacity</label>
-                    <input className="input" type="number" value={gForm.capacity} placeholder="22"
-                      onChange={e => setGForm(f => ({ ...f, capacity: e.target.value }))} />
-                  </div>
-                </div>
-
-                <div className="field">
-                  <label className="field-label">Surface</label>
-                  <select className="select" value={gForm.surface}
-                    onChange={e => setGForm(f => ({ ...f, surface: e.target.value }))}>
+                <div className="field"><label className="field-label">Surface</label>
+                  <select className="select" value={gForm.surface} onChange={e => setGForm(f => ({ ...f, surface: e.target.value }))}>
                     {SURFACES.map(s => <option key={s} value={s}>{s}</option>)}
-                  </select>
-                </div>
+                  </select></div>
 
-                <div className="field">
-                  <label className="field-label">Amenities</label>
+                <div className="field"><label className="field-label">Amenities</label>
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 4 }}>
-                    {AMENITIES_LIST.map(a => (
-                      <button key={a} type="button"
-                        onClick={() => toggleAmenity(a)}
-                        style={chipStyle(gForm.amenities.includes(a), "#166534", "var(--green-soft)", "var(--green-border)")}>
-                        {a}
-                      </button>
-                    ))}
-                  </div>
-                </div>
+                    {AMENITIES_LIST.map(a => <button key={a} type="button" onClick={() => toggleAmenity(a)} style={chip(gForm.amenities.includes(a), "#166534", "var(--green-soft)", "var(--green-border)")}>{a}</button>)}
+                  </div></div>
 
-                <div className="field">
-                  <label className="field-label">Sports</label>
+                <div className="field"><label className="field-label">Sports</label>
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 4 }}>
-                    {SPORT_OPTIONS.slice(0, 10).map(s => (
-                      <button key={s} type="button"
-                        onClick={() => toggleGSport(s)}
-                        style={chipStyle(gForm.sports.includes(s))}>
-                        {s}
-                      </button>
-                    ))}
-                  </div>
-                </div>
+                    {SPORT_OPTIONS.slice(0, 10).map(s => <button key={s} type="button" onClick={() => toggleGSport(s)} style={chip(gForm.sports.includes(s))}>{s}</button>)}
+                  </div></div>
+
+                {LocationPicker}
 
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                  <div className="field">
-                    <label className="field-label">Phone</label>
-                    <input className="input" type="tel" value={gForm.contactPhone}
-                      onChange={e => setGForm(f => ({ ...f, contactPhone: e.target.value }))} />
-                  </div>
-                  <div className="field">
-                    <label className="field-label">Email</label>
-                    <input className="input" type="email" value={gForm.contactEmail}
-                      onChange={e => setGForm(f => ({ ...f, contactEmail: e.target.value }))} />
-                  </div>
+                  <div className="field"><label className="field-label">Phone</label>
+                    <input className="input" type="tel" value={gForm.contactPhone} onChange={e => setGForm(f => ({ ...f, contactPhone: e.target.value }))} /></div>
+                  <div className="field"><label className="field-label">Email</label>
+                    <input className="input" type="email" value={gForm.contactEmail} onChange={e => setGForm(f => ({ ...f, contactEmail: e.target.value }))} /></div>
                 </div>
               </>
             )}
 
-            {err && (
-              <p style={{ margin: 0, padding: "10px 14px", borderRadius: "var(--r-md)", background: "var(--red-soft)", color: "var(--red)", fontSize: 13, fontWeight: 600, border: "1px solid var(--red-border)" }}>
-                {err}
-              </p>
-            )}
+            {err && <p style={{ margin: 0, padding: "10px 14px", borderRadius: "var(--r-md)", background: "var(--red-soft)", color: "var(--red)", fontSize: 13, fontWeight: 600, border: "1px solid var(--red-border)" }}>{err}</p>}
 
-            <button
-              disabled={saving}
-              onClick={() => void handleSubmit()}
+            <button disabled={saving} onClick={() => void handleSubmit()}
               style={{ width: "100%", minHeight: 52, border: "none", borderRadius: "var(--r-lg)", background: "var(--blue)", color: "#fff", fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 16, cursor: saving ? "not-allowed" : "pointer", opacity: saving ? 0.7 : 1 }}>
               {saving ? "Submitting…" : "Submit Listing"}
             </button>

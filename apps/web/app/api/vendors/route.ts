@@ -63,6 +63,7 @@ export async function POST(req: NextRequest) {
     website:       body.website ?? null,
     price_note:    body.priceNote ?? null,
     sports:        body.sports ?? [],
+    gst_number:    body.gst_number ?? null,
   }).select().single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
