@@ -58,7 +58,7 @@ export async function PATCH(req: NextRequest) {
     .eq("id", productId)
     .single();
 
-  if (!product || (product.vendors as { owner_id: string } | null)?.owner_id !== user.id)
+  if (!product || (product.vendors as unknown as { owner_id: string }[] | null)?.[0]?.owner_id !== user.id)
     return NextResponse.json({ error: "Not authorised" }, { status: 403 });
 
   const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
@@ -82,7 +82,7 @@ export async function DELETE(req: NextRequest) {
 
   const { data: product } = await admin
     .from("vendor_products").select("vendor_id, vendors!inner(owner_id)").eq("id", productId).single();
-  if (!product || (product.vendors as { owner_id: string } | null)?.owner_id !== user.id)
+  if (!product || (product.vendors as unknown as { owner_id: string }[] | null)?.[0]?.owner_id !== user.id)
     return NextResponse.json({ error: "Not authorised" }, { status: 403 });
 
   await admin.from("vendor_products").update({ is_active: false }).eq("id", productId);
