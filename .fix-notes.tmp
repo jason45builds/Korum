@@ -1,0 +1,6 @@
+## Fixes applied — commit as one
+
+Files changed:
+- apps/web/lib/validators.ts
+- apps/web/app/create/match/page.tsx
+- apps/web/app/dashboard/page.tsx

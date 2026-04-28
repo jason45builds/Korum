@@ -32,14 +32,32 @@ export default function CaptainControlPage() {
   const { profile, isAuthenticated, loading: authLoading } = useAuth();
   const { activeMatch, loading, loadMatch, lockMatch } = useMatch(params.matchId);
 
-  const [guests, setGuests]     = useState<GuestParticipant[]>([]);
+  const [guests,       setGuests]       = useState<GuestParticipant[]>([]);
+  const [authClaims,   setAuthClaims]   = useState<Array<{ user_id: string; users: { full_name?: string; display_name?: string; reliability_score?: number } | null }>>([]);
   const [linkCopied, setLinkCopied] = useState(false);
   const [waCopied, setWaCopied] = useState(false);
   const [msg, setMsg]           = useState<{ text: string; error: boolean } | null>(null);
   const [locking, setLocking]   = useState(false);
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { if (isAuthenticated && params.matchId) void loadGuests(); }, [isAuthenticated, params.matchId]);
+  useEffect(() => { if (isAuthenticated && params.matchId) { void loadGuests(); void loadAuthClaims(); } }, [isAuthenticated, params.matchId]);
+
+  const loadAuthClaims = async () => {
+    const res  = await fetch(`/api/participants/confirm-payment?matchId=${params.matchId}`, { credentials: "same-origin" });
+    const data = await res.json() as { claims: typeof authClaims };
+    setAuthClaims(data.claims ?? []);
+  };
+
+  const handleAuthClaim = async (playerId: string, action: "confirm" | "reject") => {
+    await fetch("/api/participants/confirm-payment", {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify({ matchId: params.matchId, playerId, action }),
+    });
+    await loadAuthClaims();
+    await loadMatch({ matchId: params.matchId });
+  };
 
   const loadGuests = async () => {
     const res  = await fetch(`/api/match/guests?matchId=${params.matchId}`, { credentials: "same-origin" });
@@ -169,7 +187,38 @@ export default function CaptainControlPage() {
           </div>
         </section>
 
-        {/* Action needed: claimed paid */}
+        {/* Action needed: claimed paid — AUTH PARTICIPANTS */}
+        {authClaims.length > 0 && (
+          <section className="panel animate-in" style={{ display: "grid", gap: "0.75rem", border: "1.5px solid var(--amber)", background: "#fffbeb" }}>
+            <div className="row-between">
+              <div>
+                <p className="eyebrow" style={{ color: "var(--amber)" }}>Payment claims — registered players</p>
+                <h3 className="title-md">Verify UPI payments</h3>
+              </div>
+              <span className="badge badge-warning">{authClaims.length}</span>
+            </div>
+            <div className="list">
+              {authClaims.map((c) => {
+                const name = c.users?.display_name ?? c.users?.full_name ?? "Player";
+                const score = c.users?.reliability_score ?? 100;
+                return (
+                  <div key={c.user_id} className="list-row">
+                    <div>
+                      <strong>{name}</strong>
+                      <div className="faint" style={{ fontSize: "0.78rem" }}>Reliability: {score}</div>
+                    </div>
+                    <div className="cluster" style={{ gap: "0.5rem" }}>
+                      <Button size="sm" onClick={() => void handleAuthClaim(c.user_id, "confirm")}>✅ Confirm</Button>
+                      <Button size="sm" variant="ghost" onClick={() => void handleAuthClaim(c.user_id, "reject")}>Reject</Button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        )}
+
+        {/* Action needed: claimed paid — GUEST PARTICIPANTS */}
         {claimedGuests.length > 0 && (
           <section className="panel animate-in" style={{ display: "grid", gap: "0.75rem", border: "1.5px solid var(--warning)", background: "#fffbeb" }}>
             <div className="row-between">
