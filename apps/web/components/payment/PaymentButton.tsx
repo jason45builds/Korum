@@ -84,8 +84,7 @@ export function PaymentButton({
 
       // ── Razorpay modal ────────────────────────────────────────────────────
       const ready = await loadRazorpayScript();
-      if (!ready) {
-        // Script load failed → fall back to manual UPI display
+      if (!ready || typeof window.Razorpay === "undefined") {
         setState("upi");
         return;
       }
