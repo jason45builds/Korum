@@ -1,322 +1,361 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
+import { useAuth } from "@/hooks/useAuth";
 
-type Captain = { full_name: string; display_name: string; upi_id: string | null; upi_name: string | null };
-type MatchInfo = {
-  id: string; title: string; venue_name: string; starts_at: string;
-  price_per_player: number; squad_size: number; status: string; join_code: string;
-  captain: Captain | null;
-};
-type CheckInfo = { id: string; match_date: string; match_time: string | null; venue_hint: string | null; note: string | null };
-type AnonResponse = { id: string; player_name: string; response: string; payment_claimed: boolean; captain_confirmed: boolean | null };
-type PollData = {
-  link: { id: string; token: string; name: string | null; expiresAt: string };
-  match: MatchInfo | null;
-  check: CheckInfo | null;
-  responses: AnonResponse[];
-  summary: { yes: number; no: number; maybe: number; total: number };
+// ─── Types ────────────────────────────────────────────────────────────────────
+type MatchData = {
+  id: string;
+  title: string;
+  venueName: string;
+  startsAt: string;
+  pricePerPlayer: number;
+  squadSize: number;
+  status: string;
+  confirmedCount: number;
+  captainName: string;
 };
 
-type Step = "landing" | "name" | "payment_now" | "claimed" | "no_done" | "maybe_done";
+type Step = "loading" | "error" | "landing" | "paying" | "verifying" | "done" | "declined";
 
-export default function PlayerPollPage() {
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+const isUUID = (s: string) =>
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
+
+const fmt = (iso: string) => {
+  try {
+    return new Date(iso).toLocaleString("en-IN", {
+      weekday: "long", day: "numeric", month: "long",
+      hour: "2-digit", minute: "2-digit",
+    });
+  } catch { return iso; }
+};
+
+// Load Razorpay script
+const loadRzp = (): Promise<boolean> =>
+  new Promise((resolve) => {
+    if (typeof window === "undefined") return resolve(false);
+    if (typeof window.Razorpay !== "undefined") return resolve(true);
+    const s = document.createElement("script");
+    s.src = "https://checkout.razorpay.com/v1/checkout.js";
+    s.onload = () => resolve(true);
+    s.onerror = () => resolve(false);
+    document.body.appendChild(s);
+  });
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
+export default function PlayerInvitePage() {
   const { token } = useParams<{ token: string }>();
-  const [data, setData]       = useState<PollData | null>(null);
-  const [err,  setErr]        = useState<string | null>(null);
-  const [step, setStep]       = useState<Step>("landing");
-  const [name, setName]       = useState("");
-  const [phone, setPhone]     = useState("");
-  const [myId, setMyId]       = useState<string | null>(null);
-  const [saving, setSaving]   = useState(false);
-  const [upiCopied, setUpiCopied] = useState(false);
+  const router    = useRouter();
+  const { profile, isAuthenticated, loading: authLoading } = useAuth();
 
+  const [match,   setMatch]   = useState<MatchData | null>(null);
+  const [step,    setStep]    = useState<Step>("loading");
+  const [errMsg,  setErrMsg]  = useState("");
+  const [joining, setJoining] = useState(false);
+
+  // ── 1. Resolve the token → match data ──────────────────────────────────────
+  useEffect(() => {
+    if (!token) return;
+    void resolveMatch();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { void load(); }, [token]);
+  }, [token]);
 
-  const load = async () => {
+  const resolveMatch = async () => {
+    setStep("loading");
     try {
-      const res  = await fetch(`/api/poll?token=${token}`);
-      const json = await res.json() as PollData & { error?: string };
-      if (!res.ok) { setErr(json.error ?? "Poll not found"); return; }
-      setData(json);
-    } catch { setErr("Could not load this link"); }
-  };
+      let matchId = token;
 
-  // Submit YES/NO/MAYBE
-  const respond = async (response: "YES" | "NO" | "MAYBE", paymentClaimed = false) => {
-    if (!data || !name.trim()) return;
-    setSaving(true);
-    try {
-      const res = await fetch("/api/poll", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pollLinkId: data.link.id, playerName: name.trim(), playerPhone: phone.trim() || undefined, response, paymentClaimed }),
-      });
-      const json = await res.json() as { response?: { id: string }; error?: string };
-      if (!res.ok) throw new Error(json.error);
-      setMyId(json.response?.id ?? null);
-    } catch (e) { alert(e instanceof Error ? e.message : "Failed"); } finally { setSaving(false); }
-  };
-
-  const handleYes = async () => {
-    await respond("YES", false);
-    setStep("payment_now");
-  };
-
-  const handleNo = async () => {
-    await respond("NO");
-    setStep("no_done");
-  };
-
-  const handleMaybe = async () => {
-    await respond("MAYBE");
-    setStep("maybe_done");
-  };
-
-  const handleClaimPaid = async () => {
-    if (!myId || !data) return;
-    setSaving(true);
-    try {
-      await fetch("/api/poll", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pollLinkId: data.link.id, playerName: name, response: "YES", responseId: myId, paymentClaimed: true, paymentNote: "Paid via UPI" }),
-      });
-      setStep("claimed");
-    } finally { setSaving(false); }
-  };
-
-  const copyUpi = async (upi: string) => {
-    try { await navigator.clipboard.writeText(upi); setUpiCopied(true); setTimeout(() => setUpiCopied(false), 2000); } catch { /* ignore */ }
-  };
-
-  const openUpiApp = (upi: string, amount: number) => {
-    window.location.href = `upi://pay?pa=${encodeURIComponent(upi)}&am=${amount}&cu=INR&tn=Match+spot`;
-  };
-
-  // ─── Loading ───────────────────────────────────────────────────────────────
-  if (!data && !err) return (
-    <Page><Card>
-      <Spin />
-      <p style={S.meta}>Loading…</p>
-    </Card></Page>
-  );
-
-  if (err) return (
-    <Page><Card>
-      <div style={{ fontSize: "3rem" }}>😕</div>
-      <h2 style={S.title}>Not found</h2>
-      <p style={S.meta}>{err}</p>
-    </Card></Page>
-  );
-
-  const match    = data!.match;
-  const check    = data!.check;
-  const summary  = data!.summary;
-  const price    = match?.price_per_player ?? 0;
-  const isPaid   = price > 0;
-  const captain  = match?.captain;
-  const upi      = captain?.upi_id;
-  const slots    = match?.squad_size ?? 0;
-  const yesCount = summary.yes;
-  const left     = slots > 0 ? Math.max(0, slots - yesCount) : null;
-
-  const title    = match?.title ?? data!.link.name ?? "Match";
-  const venue    = match?.venue_name ?? check?.venue_hint ?? "";
-  const dateStr  = match?.starts_at
-    ? new Date(match.starts_at).toLocaleString("en-IN", { weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" })
-    : check?.match_date
-      ? new Date(check.match_date + "T00:00:00").toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long" }) + (check.match_time ? ` · ${check.match_time}` : "")
-      : "";
-
-  // ─── LANDING ───────────────────────────────────────────────────────────────
-  if (step === "landing") return (
-    <Page><Card>
-      <div style={{ fontSize: "2.5rem", marginBottom: "0.25rem" }}>🏏</div>
-      <h1 style={{ ...S.title, fontSize: "1.6rem" }}>{title}</h1>
-      {dateStr && <p style={{ ...S.meta, fontWeight: 700, color: "#222", marginTop: "0.5rem" }}>{dateStr}</p>}
-      {venue   && <p style={S.meta}>📍 {venue}</p>}
-      {check?.note && <p style={{ ...S.meta, fontStyle: "italic" }}>&ldquo;{check.note}&rdquo;</p>}
-
-      <div style={S.statsRow}>
-        {isPaid && <Stat num={`₹${price}`} label="PER PLAYER" color="#b45309" />}
-        <Stat num={String(yesCount)} label="YES" color="#16a34a" />
-        {left !== null && <Stat num={String(left)} label="SLOTS LEFT" color={left > 0 ? "#1a7a4d" : "#dc2626"} />}
-        {summary.maybe > 0 && <Stat num={String(summary.maybe)} label="MAYBE" color="#d97706" />}
-      </div>
-
-      {left === 0
-        ? <div style={{ ...S.pill, background: "#fef2f2", color: "#dc2626", marginBottom: "1rem" }}>Squad is full</div>
-        : <button style={S.btnGreen} onClick={() => setStep("name")}>Can you play?</button>
+      // If not a UUID it's a short poll token — resolve to matchId via poll API
+      if (!isUUID(token)) {
+        const pollRes  = await fetch(`/api/poll?token=${token}`);
+        const pollData = await pollRes.json() as { match?: { id: string }; error?: string };
+        if (!pollRes.ok || !pollData.match?.id) {
+          setErrMsg(pollData.error ?? "Match not found");
+          setStep("error");
+          return;
+        }
+        matchId = pollData.match.id;
       }
-      <p style={{ fontSize: "0.72rem", color: "#bbb", marginTop: "0.75rem" }}>No account needed · 10 seconds</p>
-    </Card></Page>
+
+      // Load match details via the public preview endpoint (no auth needed)
+      const res  = await fetch(`/api/match/preview?matchId=${matchId}`);
+      const data = await res.json() as {
+        match?: MatchData;
+        error?: string;
+      };
+
+      if (!res.ok || !data.match) {
+        setErrMsg(data.error ?? "Match not found");
+        setStep("error");
+        return;
+      }
+
+      setMatch(data.match);
+      setStep("landing");
+    } catch (e) {
+      setErrMsg(e instanceof Error ? e.message : "Could not load match");
+      setStep("error");
+    }
+  };
+
+  // ── 2. Handle YES — join + pay ──────────────────────────────────────────────
+  const handleYes = async () => {
+    if (!match) return;
+
+    // Require sign-in
+    if (!isAuthenticated) {
+      router.push(`/auth?redirect=/p/${token}`);
+      return;
+    }
+
+    setJoining(true);
+    setStep("paying");
+
+    try {
+      // Step A: Join the match as a participant
+      const joinRes  = await fetch("/api/match/join", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({ matchId: match.id }),
+      });
+      const joinData = await joinRes.json() as { error?: string };
+      // Ignore "already joined" errors — just continue to payment
+      if (!joinRes.ok && !joinData.error?.includes("already")) {
+        throw new Error(joinData.error ?? "Could not join match");
+      }
+
+      // Free match — done
+      if (match.pricePerPlayer === 0) {
+        setStep("done");
+        return;
+      }
+
+      // Step B: Create Razorpay order
+      const orderRes  = await fetch("/api/payments/create-order", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({ matchId: match.id }),
+      });
+      const orderData = await orderRes.json() as {
+        mode?: string;
+        paymentId?: string; orderId?: string; amount?: number;
+        currency?: string; keyId?: string; matchTitle?: string;
+        error?: string;
+      };
+
+      if (!orderRes.ok) throw new Error(orderData.error ?? "Payment setup failed");
+
+      // Free / already paid
+      if (orderData.mode === "free") {
+        setStep("done");
+        return;
+      }
+
+      // Razorpay modal
+      if (orderData.mode === "razorpay") {
+        const ready = await loadRzp();
+        if (!ready || typeof window.Razorpay === "undefined") {
+          // Razorpay script blocked — redirect to full payment page as fallback
+          router.push(`/match/payment?matchId=${match.id}`);
+          return;
+        }
+
+        const rp = new window.Razorpay({
+          key:         orderData.keyId!,
+          amount:      orderData.amount!,
+          currency:    orderData.currency ?? "INR",
+          name:        "Korum",
+          description: orderData.matchTitle ?? match.title,
+          order_id:    orderData.orderId!,
+          prefill: {
+            name:    profile?.fullName ?? profile?.displayName ?? "",
+            contact: profile?.phone ?? "",
+          },
+          theme:  { color: "#2563EB" },
+          modal:  { ondismiss: () => { setStep("landing"); setJoining(false); } },
+          handler: async (response) => {
+            setStep("verifying");
+            try {
+              const vRes = await fetch("/api/payments/verify", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                credentials: "same-origin",
+                body: JSON.stringify({
+                  paymentId:           orderData.paymentId,
+                  matchId:             match.id,
+                  razorpay_order_id:   response.razorpay_order_id,
+                  razorpay_payment_id: response.razorpay_payment_id,
+                  razorpay_signature:  response.razorpay_signature,
+                }),
+              });
+              if (!vRes.ok) {
+                const ve = await vRes.json() as { error?: string };
+                throw new Error(ve.error ?? "Verification failed");
+              }
+              setStep("done");
+            } catch (e) {
+              setErrMsg(e instanceof Error ? e.message : "Payment verification failed");
+              setStep("error");
+            }
+          },
+        });
+        rp.open();
+        setJoining(false);
+        return;
+      }
+
+      // manual_upi mode — redirect to full payment page which handles UPI claim
+      router.push(`/match/payment?matchId=${match.id}`);
+
+    } catch (e) {
+      setErrMsg(e instanceof Error ? e.message : "Something went wrong");
+      setStep("error");
+      setJoining(false);
+    }
+  };
+
+  // ── Render ──────────────────────────────────────────────────────────────────
+
+  if (step === "loading" || authLoading) return (
+    <Shell>
+      <div style={S.spinner} />
+      <p style={S.meta}>Loading match…</p>
+    </Shell>
   );
 
-  // ─── NAME ──────────────────────────────────────────────────────────────────
-  if (step === "name") return (
-    <Page><Card>
-      <h2 style={S.title}>What&apos;s your name?</h2>
-      <p style={{ ...S.meta, marginBottom: "1.5rem" }}>So the captain knows who&apos;s responding</p>
-
-      <input autoFocus style={S.input} placeholder="Your name"
-        value={name} onChange={(e) => setName(e.target.value)}
-        onKeyDown={(e) => { if (e.key === "Enter" && name.trim()) void (async () => { await handleYes(); })(); }} />
-      <input style={{ ...S.input, marginTop: "0.75rem" }} placeholder="Phone (optional)" type="tel" inputMode="tel"
-        value={phone} onChange={(e) => setPhone(e.target.value)} />
-
-      <div style={{ display: "grid", gap: "0.6rem", marginTop: "1.25rem", width: "100%" }}>
-        <button style={{ ...S.btnGreen, opacity: name.trim() ? 1 : 0.4 }}
-          disabled={!name.trim() || saving} onClick={() => void handleYes()}>
-          {saving ? "Saving…" : isPaid ? `✅  I’m In — Pay ₹${price}` : "✅  I’m In"}
-        </button>
-        <button style={{ ...S.btnAmber }}
-          disabled={saving} onClick={() => void handleMaybe()}>
-          🤔  Maybe
-        </button>
-        <button style={{ ...S.btnRed }}
-          disabled={saving} onClick={() => void handleNo()}>
-          ❌  Can’t Make It
-        </button>
-      </div>
-      <button style={S.btnBack} onClick={() => setStep("landing")}>← Back</button>
-    </Card></Page>
+  if (step === "error") return (
+    <Shell>
+      <div style={{ fontSize: 48, marginBottom: 12 }}>😕</div>
+      <h2 style={S.title}>Not found</h2>
+      <p style={{ ...S.meta, marginBottom: 24 }}>{errMsg || "This link may have expired."}</p>
+      <button style={S.btnGhost} onClick={() => router.push("/")}>Go home</button>
+    </Shell>
   );
 
-  // ─── PAYMENT NOW (mandatory after YES) ────────────────────────────────────
-  if (step === "payment_now") return (
-    <Page><Card>
-      <div style={{ fontSize: "2rem", marginBottom: "0.5rem" }}>💰</div>
-      <h2 style={{ ...S.title, fontSize: "1.4rem" }}>Confirm your spot</h2>
-      <p style={{ ...S.meta, marginBottom: "1.5rem" }}>Pay to lock your place in the squad</p>
+  if (step === "verifying") return (
+    <Shell>
+      <div style={S.spinner} />
+      <p style={S.meta}>Verifying payment…</p>
+    </Shell>
+  );
 
-      {/* Amount badge */}
-      <div style={{ background: "#f0fdf4", border: "2px solid #86efac", borderRadius: "16px", padding: "1rem 1.5rem", textAlign: "center", marginBottom: "1.5rem", width: "100%" }}>
-        <div style={{ fontSize: "2.2rem", fontWeight: 900, color: "#16a34a" }}>₹{price}</div>
-        <div style={{ fontSize: "0.78rem", color: "#666", marginTop: "0.25rem" }}>Match fee</div>
-      </div>
+  if (step === "done") return (
+    <Shell>
+      <div style={{ fontSize: 56, marginBottom: 12 }}>🎉</div>
+      <h2 style={{ ...S.title, color: "var(--green, #16a34a)" }}>You&apos;re confirmed!</h2>
+      <p style={{ ...S.meta, marginBottom: 24 }}>Your spot is locked. See you on the field.</p>
+      <button style={S.btnPrimary} onClick={() => router.push(`/match/${match?.id}`)}>
+        View Match
+      </button>
+    </Shell>
+  );
 
-      {/* Captain UPI details */}
-      {upi ? (
-        <div style={{ background: "#fff7ed", border: "1.5px solid #fed7aa", borderRadius: "12px", padding: "1rem", width: "100%", marginBottom: "1.5rem" }}>
-          <p style={{ margin: "0 0 0.5rem", fontSize: "0.78rem", color: "#9a3412", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-            Pay to captain
-          </p>
-          <p style={{ margin: "0 0 0.15rem", fontWeight: 700, fontSize: "1rem", color: "#111" }}>
-            {captain?.upi_name ?? captain?.display_name ?? captain?.full_name ?? "Captain"}
-          </p>
-          <p style={{ margin: 0, fontFamily: "monospace", fontSize: "1rem", color: "#b45309", letterSpacing: "0.03em" }}>{upi}</p>
-          <div style={{ display: "flex", gap: "0.6rem", marginTop: "1rem" }}>
-            <button style={{ flex: 1, padding: "0.65rem", borderRadius: "8px", border: "1.5px solid #fb923c", background: "#fff", color: "#ea580c", fontWeight: 700, fontSize: "0.85rem", cursor: "pointer" }}
-              onClick={() => void copyUpi(upi)}>
-              {upiCopied ? "✓ Copied!" : "Copy UPI"}
-            </button>
-            <button style={{ flex: 1, padding: "0.65rem", borderRadius: "8px", border: "none", background: "#ea580c", color: "#fff", fontWeight: 700, fontSize: "0.85rem", cursor: "pointer" }}
-              onClick={() => openUpiApp(upi, price)}>
-              Open UPI App
-            </button>
+  if (step === "declined") return (
+    <Shell>
+      <div style={{ fontSize: 56, marginBottom: 12 }}>👋</div>
+      <h2 style={S.title}>No worries!</h2>
+      <p style={{ ...S.meta, marginBottom: 24 }}>Thanks for letting the captain know.</p>
+      <button style={S.btnGhost} onClick={() => router.push("/")}>Close</button>
+    </Shell>
+  );
+
+  if (!match) return null;
+
+  const slotsLeft = Math.max(0, match.squadSize - match.confirmedCount);
+  const isFull    = slotsLeft === 0;
+  const dateStr   = fmt(match.startsAt);
+
+  return (
+    <Shell>
+      {/* Match card */}
+      <div style={{ width: "100%", background: "#fff", borderRadius: 20, overflow: "hidden", boxShadow: "0 4px 24px rgba(0,0,0,0.10)", marginBottom: 20 }}>
+        <div style={{ height: 5, background: "linear-gradient(90deg,#2563EB,#60A5FA)" }} />
+        <div style={{ padding: "20px 20px 16px", textAlign: "center" }}>
+          <div style={{ fontSize: 36, marginBottom: 8 }}>🏏</div>
+          <h1 style={{ ...S.title, fontSize: "1.35rem", marginBottom: 6 }}>{match.title}</h1>
+          <p style={{ ...S.meta, fontWeight: 600, color: "#222" }}>{dateStr}</p>
+          {match.venueName && <p style={S.meta}>📍 {match.venueName}</p>}
+
+          {/* Stats */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8, marginTop: 16 }}>
+            {[
+              { val: match.confirmedCount, label: "Confirmed", color: "#16a34a" },
+              { val: slotsLeft,            label: "Slots left", color: isFull ? "#dc2626" : "#2563EB" },
+              { val: match.pricePerPlayer > 0 ? `₹${match.pricePerPlayer}` : "Free", label: "Fee", color: "#b45309" },
+            ].map(({ val, label, color }) => (
+              <div key={label} style={{ background: "#f8fafc", borderRadius: 12, padding: "10px 6px" }}>
+                <div style={{ fontSize: "1.4rem", fontWeight: 900, color, lineHeight: 1 }}>{val}</div>
+                <div style={{ fontSize: "0.65rem", fontWeight: 700, color: "#999", textTransform: "uppercase", letterSpacing: "0.06em", marginTop: 3 }}>{label}</div>
+              </div>
+            ))}
           </div>
         </div>
-      ) : (
-        <div style={{ background: "#fafafa", border: "1.5px dashed #d4d4d8", borderRadius: "12px", padding: "1rem", width: "100%", marginBottom: "1.5rem", textAlign: "center" }}>
-          <p style={{ margin: 0, fontSize: "0.9rem", color: "#888" }}>Contact the captain for UPI details</p>
-          <p style={{ margin: "0.25rem 0 0", fontSize: "0.85rem", fontWeight: 700, color: "#555" }}>
-            Join code: <span style={{ fontFamily: "monospace", color: "#1a7a4d" }}>{match?.join_code}</span>
-          </p>
+      </div>
+
+      {/* CTAs */}
+      {isFull ? (
+        <div style={{ ...S.pill, background: "#fef2f2", color: "#dc2626", marginBottom: 12 }}>
+          Squad is full — no slots available
         </div>
+      ) : (
+        <button
+          style={{ ...S.btnGreen, opacity: joining ? 0.7 : 1 }}
+          disabled={joining}
+          onClick={() => void handleYes()}>
+          {joining ? (
+            <span style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+              <span style={{ ...S.spinnerInline }} /> Joining…
+            </span>
+          ) : isAuthenticated ? (
+            match.pricePerPlayer > 0 ? `✅ I'm In — Pay ₹${match.pricePerPlayer}` : "✅ I'm In"
+          ) : (
+            "✅ I'm In — Sign In to Join"
+          )}
+        </button>
       )}
 
-      {/* I have paid */}
-      <button style={S.btnGreen} disabled={saving} onClick={() => void handleClaimPaid()}>
-        {saving ? "Saving…" : "✅  I Have Paid"}
+      <button style={{ ...S.btnRed, marginTop: 10 }} onClick={() => setStep("declined")}>
+        ❌ Can&apos;t Play
       </button>
-      <p style={{ fontSize: "0.75rem", color: "#aaa", marginTop: "0.75rem" }}>
-        Captain will verify and confirm your spot
-      </p>
-    </Card></Page>
-  );
 
-  // ─── CLAIMED — waiting for captain ────────────────────────────────────────
-  if (step === "claimed") return (
-    <Page><Card>
-      <div style={{ fontSize: "3rem", marginBottom: "0.5rem" }}>⏳</div>
-      <h2 style={S.title}>Waiting for confirmation</h2>
-      <p style={{ ...S.meta, marginBottom: "1.5rem", lineHeight: 1.6 }}>
-        Your payment is noted. The captain will verify and confirm your spot shortly.
-      </p>
-      <div style={{ ...S.pill, background: "#fef3c7", color: "#92400e" }}>📩 Payment claimed · Pending captain</div>
-      <div style={S.statsRow}>
-        <Stat num={String(yesCount + 1)} label="YES" color="#16a34a" />
-        {left !== null && <Stat num={String(Math.max(0, left - 1))} label="SLOTS LEFT" color="#1a7a4d" />}
-      </div>
-      <p style={{ fontSize: "0.72rem", color: "#bbb" }}>You can close this page</p>
-    </Card></Page>
-  );
-
-  // ─── NO / MAYBE done ───────────────────────────────────────────────────────
-  if (step === "no_done") return (
-    <Page><Card>
-      <div style={{ fontSize: "3rem", marginBottom: "0.5rem" }}>👋</div>
-      <h2 style={S.title}>No worries!</h2>
-      <p style={{ ...S.meta, lineHeight: 1.6 }}>Thanks for letting the captain know. Maybe next time!</p>
-      <div style={S.statsRow}>
-        <Stat num={String(yesCount)} label="YES" color="#16a34a" />
-        <Stat num={String(summary.no + 1)} label="NO" color="#dc2626" />
-      </div>
-    </Card></Page>
-  );
-
-  return (
-    <Page><Card>
-      <div style={{ fontSize: "3rem", marginBottom: "0.5rem" }}>🤔</div>
-      <h2 style={S.title}>Got it!</h2>
-      <p style={{ ...S.meta, lineHeight: 1.6 }}>Captain will keep a slot open if available.</p>
-      <div style={S.statsRow}>
-        <Stat num={String(yesCount)} label="YES" color="#16a34a" />
-        <Stat num={String(summary.maybe + 1)} label="MAYBE" color="#d97706" />
-      </div>
-    </Card></Page>
+      {!isAuthenticated && (
+        <p style={{ ...S.meta, fontSize: "0.75rem", marginTop: 12, color: "#999" }}>
+          You&apos;ll sign in first, then come back here to confirm your spot.
+        </p>
+      )}
+    </Shell>
   );
 }
 
-// ─── Sub-components ──────────────────────────────────────────────────────────
-function Page({ children }: { children: React.ReactNode }) {
+// ─── Layout shell ─────────────────────────────────────────────────────────────
+function Shell({ children }: { children: React.ReactNode }) {
   return (
-    <div style={{ minHeight: "100dvh", display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem", background: "linear-gradient(160deg,#f0fdf4,#ecfdf5 60%,#fff)" }}>
-      {children}
+    <div style={{
+      minHeight: "100dvh", display: "flex", flexDirection: "column",
+      alignItems: "center", justifyContent: "center",
+      padding: "1.5rem 1rem",
+      background: "linear-gradient(160deg, #EFF6FF 0%, #F0FDF4 100%)",
+    }}>
+      <div style={{ width: "100%", maxWidth: 400, display: "flex", flexDirection: "column", alignItems: "center" }}>
+        {children}
+      </div>
     </div>
   );
 }
-function Card({ children }: { children: React.ReactNode }) {
-  return (
-    <div style={{ background: "#fff", borderRadius: "24px", boxShadow: "0 8px 48px rgba(0,0,0,0.10)", padding: "2rem 1.5rem", width: "min(100%,390px)", textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: "0.1rem" }}>
-      {children}
-    </div>
-  );
-}
-function Stat({ num, label, color }: { num: string; label: string; color?: string }) {
-  return (
-    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "0.15rem" }}>
-      <span style={{ fontSize: "2rem", fontWeight: 900, color: color ?? "#111", lineHeight: 1 }}>{num}</span>
-      <span style={{ fontSize: "0.62rem", fontWeight: 700, color: "#aaa", letterSpacing: "0.08em" }}>{label}</span>
-    </div>
-  );
-}
-function Spin() {
-  return <div style={{ width: "2rem", height: "2rem", border: "3px solid #e4e4e7", borderTopColor: "#1a7a4d", borderRadius: "999px", animation: "spin 0.7s linear infinite" }} />;
-}
 
-// ─── Styles ──────────────────────────────────────────────────────────────────
+// ─── Styles ────────────────────────────────────────────────────────────────────
 const S = {
-  title:    { margin: "0.25rem 0 0.25rem", fontSize: "1.5rem", fontWeight: 800, color: "#111", lineHeight: 1.2 } as React.CSSProperties,
-  meta:     { margin: "0.1rem 0", fontSize: "0.9rem", color: "#555" } as React.CSSProperties,
-  statsRow: { display: "flex", gap: "1.5rem", justifyContent: "center", margin: "1.25rem 0", width: "100%" } as React.CSSProperties,
-  pill:     { borderRadius: "999px", padding: "0.4rem 1rem", fontSize: "0.82rem", fontWeight: 700, marginBottom: "0.5rem" } as React.CSSProperties,
-  input:    { width: "100%", padding: "0.9rem 1rem", borderRadius: "12px", border: "1.5px solid #e4e4e7", fontSize: "1rem", outline: "none", boxSizing: "border-box" as const, background: "#fafafa" } as React.CSSProperties,
-  btnGreen: { width: "100%", padding: "1rem", borderRadius: "999px", border: "none", background: "#16a34a", color: "#fff", fontWeight: 800, fontSize: "1rem", cursor: "pointer", transition: "opacity 150ms" } as React.CSSProperties,
-  btnAmber: { width: "100%", padding: "0.9rem", borderRadius: "999px", border: "none", background: "#d97706", color: "#fff", fontWeight: 800, fontSize: "0.95rem", cursor: "pointer" } as React.CSSProperties,
-  btnRed:   { width: "100%", padding: "0.9rem", borderRadius: "999px", border: "none", background: "#dc2626", color: "#fff", fontWeight: 800, fontSize: "0.95rem", cursor: "pointer" } as React.CSSProperties,
-  btnBack:  { background: "none", border: "none", cursor: "pointer", color: "#aaa", fontSize: "0.85rem", padding: "0.5rem", marginTop: "0.25rem" } as React.CSSProperties,
+  title:    { margin: "0.15rem 0", fontSize: "1.4rem", fontWeight: 800, color: "#111", lineHeight: 1.2 } as React.CSSProperties,
+  meta:     { margin: "0.1rem 0", fontSize: "0.9rem", color: "#555", lineHeight: 1.5 } as React.CSSProperties,
+  pill:     { borderRadius: 999, padding: "0.4rem 1.2rem", fontSize: "0.82rem", fontWeight: 700, textAlign: "center" as const, width: "100%" } as React.CSSProperties,
+  btnGreen: { width: "100%", padding: "1rem", borderRadius: 999, border: "none", background: "#16a34a", color: "#fff", fontWeight: 800, fontSize: "1rem", cursor: "pointer", transition: "opacity 150ms" } as React.CSSProperties,
+  btnRed:   { width: "100%", padding: "0.85rem", borderRadius: 999, border: "none", background: "#dc2626", color: "#fff", fontWeight: 800, fontSize: "0.95rem", cursor: "pointer" } as React.CSSProperties,
+  btnPrimary: { width: "100%", padding: "1rem", borderRadius: 999, border: "none", background: "#2563EB", color: "#fff", fontWeight: 800, fontSize: "1rem", cursor: "pointer" } as React.CSSProperties,
+  btnGhost: { width: "100%", padding: "0.9rem", borderRadius: 999, border: "1.5px solid #d1d5db", background: "#fff", color: "#555", fontWeight: 700, fontSize: "0.95rem", cursor: "pointer" } as React.CSSProperties,
+  spinner:  { width: 36, height: 36, border: "3px solid #e4e7eb", borderTopColor: "#2563EB", borderRadius: "50%", animation: "spin 0.75s linear infinite", marginBottom: 12 } as React.CSSProperties,
+  spinnerInline: { width: 18, height: 18, border: "2px solid rgba(255,255,255,0.4)", borderTopColor: "#fff", borderRadius: "50%", animation: "spin 0.7s linear infinite", flexShrink: 0 } as React.CSSProperties,
 };
