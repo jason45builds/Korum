@@ -69,9 +69,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ mode: "free" });
     }
 
-    const keyId     = process.env.RAZORPAY_KEY_ID;
-    const keySecret = process.env.RAZORPAY_KEY_SECRET;
-    const razorpayReady = Boolean(keyId && keySecret && keyId !== "YOUR_RAZORPAY_KEY_ID" && keySecret !== "YOUR_RAZORPAY_KEY_SECRET");
+    const keyId     = process.env.RAZORPAY_KEY_ID?.trim();
+    const keySecret = process.env.RAZORPAY_KEY_SECRET?.trim();
+    const razorpayReady = Boolean(
+      keyId &&
+      keySecret &&
+      keyId.startsWith("rzp_") &&
+      keySecret.length > 10
+    );
+
+    console.log("[create-order] razorpayReady:", razorpayReady, "keyId prefix:", keyId?.slice(0, 10));
 
     // ── MANUAL UPI FALLBACK ──────────────────────────────────────────────────
     if (!razorpayReady) {
