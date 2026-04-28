@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import type { UserProfile } from "@korum/types/user";
-import "@/lib/razorpay.d.ts";
 
 type OrderResponse =
   | {
