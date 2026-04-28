@@ -136,13 +136,13 @@ export async function POST(req: NextRequest) {
 
     // Notify captain of each payment
     if (match?.captain_id) {
-      await admin.from("notifications").insert({
+      void Promise.resolve(admin.from("notifications").insert({
         user_id:  match.captain_id,
         type:     "payment_confirmed",
         title:    "Payment received",
         body:     "A player has paid their match fee.",
         match_id: matchId,
-      }).then(() => {}).catch(() => {});
+      })).catch(() => {});
     }
 
     console.log("[webhook] Processed payment.captured", { matchId, userId, orderId: payment.order_id });

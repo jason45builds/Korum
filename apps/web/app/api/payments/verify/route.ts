@@ -62,11 +62,11 @@ export async function POST(req: NextRequest) {
       .single();
 
     if (match?.status === "RSVP_OPEN") {
-      await admin.rpc("transition_match_state", {
+      void Promise.resolve(admin.rpc("transition_match_state", {
         p_match_id:   matchId,
         p_next_state: "PAYMENT_PENDING",
         p_actor:      user.id,
-      }).then(() => {}).catch(() => {});
+      })).catch(() => {});
     }
 
     // Check if squad now full → auto-lock
@@ -78,11 +78,11 @@ export async function POST(req: NextRequest) {
         .in("status", ["CONFIRMED", "LOCKED"]);
 
       if ((count ?? 0) >= (match.squad_size as number)) {
-        await admin.rpc("transition_match_state", {
+        void Promise.resolve(admin.rpc("transition_match_state", {
           p_match_id:   matchId,
           p_next_state: "LOCKED",
           p_actor:      user.id,
-        }).then(() => {}).catch(() => {});
+        })).catch(() => {});
       }
     }
 
