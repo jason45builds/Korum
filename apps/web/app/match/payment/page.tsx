@@ -63,7 +63,9 @@ function MatchPaymentContent() {
     );
   }
 
-  const me = activeMatch.participants.find((p) => p.userId === profile?.id);
+  const me        = activeMatch.participants.find((p) => p.userId === profile?.id);
+  const isCaptain  = activeMatch.captainId === profile?.id;
+  const alreadyPaid = me && ["CONFIRMED", "LOCKED"].includes(me.status);
 
   return (
     <main>
@@ -90,9 +92,17 @@ function MatchPaymentContent() {
                 : "Pay to lock your spot"}
             </h3>
           </div>
-          {me && ["CONFIRMED", "LOCKED"].includes(me.status) ? (
+          {alreadyPaid ? (
             <p className="muted" style={{ fontSize: "0.9rem" }}>
-              Your payment is complete and your squad slot is secured.
+              Your payment is complete and your squad slot is secured. ✅
+            </p>
+          ) : isCaptain ? (
+            <p className="muted" style={{ fontSize: "0.9rem" }}>
+              You&apos;re the captain — you don&apos;t pay via this screen. Manage the match from your captain panel.
+            </p>
+          ) : !me ? (
+            <p className="muted" style={{ fontSize: "0.9rem" }}>
+              You haven&apos;t joined this match yet. Open the match link to RSVP first.
             </p>
           ) : (
             <PaymentButton matchId={activeMatch.id} profile={profile} />
