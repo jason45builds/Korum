@@ -64,13 +64,13 @@ export async function GET(req: NextRequest) {
     });
 
     const availability = members.map(m => {
-      const u = m.users as { id: string; display_name?: string; full_name?: string; reliability_score?: number };
+      const u = (m.users as unknown) as { id: string; display_name?: string; full_name?: string; reliability_score?: number } | null;
       const av = avMap.get(m.user_id);
       return {
         userId:           m.user_id,
-        displayName:      u.display_name ?? u.full_name ?? "Player",
+        displayName:      u?.display_name ?? u?.full_name ?? "Player",
         role:             m.role,
-        reliabilityScore: u.reliability_score ?? 100,
+        reliabilityScore: u?.reliability_score ?? 100,
         status:           av?.status ?? "NO_RESPONSE",
         matchTime:        av?.match_time ?? null,
       };
