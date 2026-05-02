@@ -47,11 +47,14 @@ const TABS = [
     ),
   },
   {
-    href: "/activity",
-    label: "Activity",
+    href: "/tournaments",
+    label: "Cups",
     icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round">
-        <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0" />
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M6 9H4.5a2.5 2.5 0 010-5H6" />
+        <path d="M18 9h1.5a2.5 2.5 0 000-5H18" />
+        <path d="M4 22h16M11 4H6v7a6 6 0 0012 0V4h-5" />
+        <path d="M12 17v5" />
       </svg>
     ),
   },

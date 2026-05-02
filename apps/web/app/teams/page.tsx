@@ -13,6 +13,8 @@ import type { TeamDetails } from "@korum/types/team";
 
 type Sheet = "none" | "create" | "join";
 
+const memberText = (n: number) => n === 1 ? "1 member" : `${n} members`;
+
 export default function TeamsPage() {
   const { isAuthenticated, loading: authLoading } = useAuth();
   const [teams, setTeams]   = useState<TeamDetails[]>([]);
@@ -156,7 +158,7 @@ export default function TeamsPage() {
                     <div>
                       <p style={{ margin: 0, fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 15 }}>{team.name}</p>
                       <p className="t-caption" style={{ marginTop: 2 }}>
-                        {team.sport} · {team.city} · {team.members.length} members
+                        {team.sport} · {team.city} · {memberText(team.members.length)}
                       </p>
                     </div>
                   </div>

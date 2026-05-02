@@ -177,7 +177,7 @@ export default function HomePage() {
         {/* ── Greeting ──────────────────────────────────────────────────── */}
         <div style={{ paddingTop: 4 }}>
           <p className="t-caption" style={{ marginBottom: 2 }}>{greet}</p>
-          <h2 className="t-h2">{profile?.displayName ?? "Hey there"} 👋</h2>
+          <h2 className="t-h2">{profile?.displayName ?? profile?.fullName ?? "Hey there"} 👋</h2>
         </div>
 
         {/* ── SECTION 1 — ACTION REQUIRED ───────────────────────────────── */}

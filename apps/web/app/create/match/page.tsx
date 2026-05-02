@@ -1,7 +1,7 @@
 "use client";
 /* eslint-disable react-hooks/exhaustive-deps */
 
-import { Suspense, useEffect, useState } from "react";
+import React, { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import { AuthPanel } from "@/components/shared/AuthPanel";
@@ -39,7 +39,34 @@ function CreateMatchInner() {
     squadSize: 11, pricePerPlayer: 250,
   });
 
-  const [isRecurring, setIsRecurring] = useState(false);
+  const [groundQuery, setGroundQuery]     = useState(prefillVenue);
+  const [groundResults, setGroundResults] = useState<Array<{ id: string; name: string; address: string; city: string; sport: string[]; price_per_hour: number | null; surface: string | null; is_verified: boolean }>>([]);
+  const [groundSearching, setGroundSearching] = useState(false);
+  const [groundDropOpen, setGroundDropOpen]   = useState(false);
+  const groundTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const searchGrounds = (val: string) => {
+    setGroundQuery(val);
+    setForm(c => ({ ...c, venueName: val }));
+    setGroundDropOpen(true);
+    if (groundTimer.current) clearTimeout(groundTimer.current);
+    if (val.length < 2) { setGroundResults([]); return; }
+    groundTimer.current = setTimeout(async () => {
+      setGroundSearching(true);
+      try {
+        const res  = await fetch(`/api/grounds/search?q=${encodeURIComponent(val)}&city=${encodeURIComponent(form.teamId ? (teams.find(t => t.id === form.teamId)?.city ?? "") : "")}`);
+        const data = await res.json() as { grounds: typeof groundResults };
+        setGroundResults(data.grounds ?? []);
+      } finally { setGroundSearching(false); }
+    }, 280);
+  };
+
+  const selectGround = (g: typeof groundResults[0]) => {
+    setGroundQuery(g.name);
+    setForm(c => ({ ...c, venueName: g.name }));
+    setGroundResults([]);
+    setGroundDropOpen(false);
+  };
   const [recurringForm, setRecurringForm] = useState({ frequency: "WEEKLY", dayOfWeek: 0, timeOfDay: "07:00", generateCount: 4 });
   const DAYS = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
 
@@ -249,10 +276,50 @@ function CreateMatchInner() {
               <input type="datetime-local" className="input" value={form.startsAt} onChange={F("startsAt")} />
             </label>
 
-            {/* Location */}
+            {/* Location — smart ground search */}
             <label className="label">
               Location
-              <input className="input" placeholder="Nehru Stadium, Chennai" value={form.venueName} onChange={F("venueName")} />
+              <div style={{ position: "relative" }}>
+                <input
+                  className="input"
+                  placeholder="Search ground or type venue name…"
+                  value={groundQuery}
+                  onChange={e => searchGrounds(e.target.value)}
+                  onFocus={() => groundQuery.length >= 2 && setGroundDropOpen(true)}
+                  onBlur={() => setTimeout(() => setGroundDropOpen(false), 180)}
+                  autoComplete="off"
+                />
+                {groundSearching && (
+                  <div style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", width: 16, height: 16, border: "2px solid var(--line)", borderTopColor: "var(--blue)", borderRadius: "50%", animation: "spin 0.7s linear infinite" }} />
+                )}
+                {/* Dropdown */}
+                {groundDropOpen && (groundResults.length > 0 || groundQuery.length >= 2) && (
+                  <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, background: "var(--surface)", border: "1.5px solid var(--line)", borderRadius: "var(--r-md)", boxShadow: "0 8px 24px rgba(0,0,0,0.12)", zIndex: 50, overflow: "hidden" }}>
+                    {groundResults.map(g => (
+                      <button key={g.id}
+                        type="button"
+                        onMouseDown={() => selectGround(g)}
+                        style={{ width: "100%", padding: "10px 14px", border: "none", background: "transparent", cursor: "pointer", textAlign: "left", borderBottom: "1px solid var(--line)", display: "flex", flexDirection: "column", gap: 2 }}
+                        onMouseEnter={e => (e.currentTarget.style.background = "var(--blue-soft)")}
+                        onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 14 }}>{g.name}</span>
+                          {g.is_verified && <span style={{ fontSize: 12 }}>✅</span>}
+                          {g.price_per_hour && <span style={{ fontSize: 11, padding: "1px 6px", background: "var(--amber-soft)", color: "#92400e", borderRadius: "var(--r-full)", marginLeft: "auto" }}>₹{g.price_per_hour}/hr</span>}
+                        </div>
+                        <span style={{ fontSize: 12, color: "var(--text-3)" }}>📍 {g.address}, {g.city}</span>
+                      </button>
+                    ))}
+                    {/* Register ground option always at bottom */}
+                    <button
+                      type="button"
+                      onMouseDown={() => { window.open("/marketplace/register?type=ground", "_blank"); }}
+                      style={{ width: "100%", padding: "10px 14px", border: "none", background: "transparent", cursor: "pointer", textAlign: "left", display: "flex", alignItems: "center", gap: 8, color: "var(--blue)", fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 13 }}>
+                      <span>+</span> Register "{groundQuery}" as a ground
+                    </button>
+                  </div>
+                )}
+              </div>
             </label>
 
             {/* Squad + cost */}

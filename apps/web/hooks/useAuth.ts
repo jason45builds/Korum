@@ -14,6 +14,7 @@ export const useAuth = () => {
     profile,
     isAuthenticated,
     loading,
+    _hydrated,
     setLoading,
     setAuthenticated,
     setProfile,
@@ -28,16 +29,21 @@ export const useAuth = () => {
   };
 
   useEffect(() => {
+    // Wait for Zustand to finish reading localStorage before doing anything.
+    // Without this guard, we see a flash of unauthenticated state on every
+    // page load even when the user is already signed in.
+    if (!_hydrated) return;
+
     if (initialised.current) return;
     initialised.current = true;
 
-    // Set loading true now that we are actively checking
-    setLoading(true);
+    // If persist already gave us a valid session, just verify it quietly
+    // in the background rather than showing a loading spinner.
+    const skipSpinner = isAuthenticated && !!profile;
 
-    // Absolute fallback — never stay loading more than 8 seconds
-    const timeout = setTimeout(() => {
-      setLoading(false);
-    }, 8000);
+    if (!skipSpinner) setLoading(true);
+
+    const timeout = setTimeout(() => setLoading(false), 8000);
 
     const run = async () => {
       try {
@@ -49,21 +55,23 @@ export const useAuth = () => {
         if (sessionError) throw sessionError;
 
         if (!session?.user) {
+          // No live Supabase session — clear persisted state
           reset();
           return;
         }
 
         setAuthenticated(true);
 
-        try {
+        // If we already have the profile from persist, refresh it silently
+        // so we don't block rendering
+        if (skipSpinner) {
+          void refreshProfile().catch(() => {});
+        } else {
           await refreshProfile();
-        } catch (profileErr) {
-          setError(toErrorMessage(profileErr));
         }
       } catch (err) {
-        const msg = toErrorMessage(err);
-        console.error("[Korum] Auth init failed:", msg);
-        setError(msg);
+        console.error("[Korum] Auth init failed:", toErrorMessage(err));
+        setError(toErrorMessage(err));
         reset();
       } finally {
         clearTimeout(timeout);
@@ -73,28 +81,27 @@ export const useAuth = () => {
 
     void run();
 
-    // Auth state listener — best effort
+    // Subscribe to Supabase auth state changes (sign in / sign out)
     let unsubscribe: (() => void) | null = null;
-
     void import("@/services/supabase/client").then(({ getSupabaseBrowserClient }) => {
       try {
         const client = getSupabaseBrowserClient();
         const { data: { subscription } } = client.auth.onAuthStateChange((_event, session) => {
           if (!session?.user) { reset(); return; }
           setAuthenticated(true);
-          void refreshProfile().catch((err) => setError(toErrorMessage(err)));
+          void refreshProfile().catch((e) => setError(toErrorMessage(e)));
         });
         unsubscribe = () => subscription.unsubscribe();
-      } catch {
-        // ignore
-      }
+      } catch { /* ignore */ }
     }).catch(() => {});
 
     return () => {
       clearTimeout(timeout);
       unsubscribe?.();
     };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // Only re-run when hydration completes
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [_hydrated]);
 
   const getClient = async () => {
     const { getSupabaseBrowserClient } = await import("@/services/supabase/client");
@@ -106,30 +113,18 @@ export const useAuth = () => {
     const client = await getClient();
     const { error: err, data } = await client.auth.signInWithPassword({ email, password });
     if (err) throw err;
-    if (data.session?.user) {
-      setAuthenticated(true);
-      await refreshProfile();
-    }
+    if (data.session?.user) { setAuthenticated(true); await refreshProfile(); }
   };
 
   const signUpWithEmail = async (email: string, password: string, fullName?: string) => {
     setError(null);
     const client = await getClient();
     const { error: err, data } = await client.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          full_name: fullName ?? email.split("@")[0],
-          display_name: fullName ?? email.split("@")[0],
-        },
-      },
+      email, password,
+      options: { data: { full_name: fullName ?? email.split("@")[0], display_name: fullName ?? email.split("@")[0] } },
     });
     if (err) throw err;
-    if (data.session?.user) {
-      setAuthenticated(true);
-      await refreshProfile();
-    }
+    if (data.session?.user) { setAuthenticated(true); await refreshProfile(); }
   };
 
   const signInWithOtp = async (phone: string, fullName?: string) => {
@@ -147,20 +142,13 @@ export const useAuth = () => {
     const client = await getClient();
     const { error: err, data } = await client.auth.verifyOtp({ phone, token, type: "sms" });
     if (err) throw err;
-    if (data.session?.user) {
-      setAuthenticated(true);
-      await refreshProfile();
-    }
+    if (data.session?.user) { setAuthenticated(true); await refreshProfile(); }
   };
 
   const saveProfile = async (payload: {
-    fullName: string;
-    displayName?: string;
-    defaultSport?: string | null;
-    city?: string | null;
-    role?: "captain" | "player";
-    upiId?: string | null;
-    upiName?: string | null;
+    fullName: string; displayName?: string; defaultSport?: string | null;
+    city?: string | null; role?: "captain" | "player";
+    upiId?: string | null; upiName?: string | null;
   }) => {
     const response = await apiRequest<{ profile: UserProfile }>("/api/auth", {
       method: "POST",
@@ -171,19 +159,16 @@ export const useAuth = () => {
   };
 
   const signOut = async () => {
-    try {
-      const client = await getClient();
-      await client.auth.signOut();
-    } catch {
-      // ignore
-    }
+    try { const client = await getClient(); await client.auth.signOut(); } catch { /* ignore */ }
     reset();
   };
 
   return {
     profile,
     isAuthenticated,
-    loading,
+    // Only show loading spinner before hydration completes OR during active check.
+    // Never show loading if persist already confirmed auth — prevents the flash.
+    loading: !_hydrated || loading,
     error,
     refreshProfile,
     signInWithEmail,

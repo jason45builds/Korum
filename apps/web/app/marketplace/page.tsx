@@ -261,7 +261,8 @@ export default function MarketplacePage() {
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               {vendors.map(v => (
-                <div key={v.id} className="card animate-in" style={{ padding: "14px 16px" }}>
+                <Link key={v.id} href={`/marketplace/vendor/${v.id}`}>
+                <div className="card animate-in" style={{ padding: "14px 16px", cursor: "pointer" }}>
                   <div style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
                     <div style={{ width: 48, height: 48, borderRadius: "var(--r-md)", background: "var(--blue-soft)", display: "grid", placeItems: "center", fontSize: 22, flexShrink: 0 }}>
                       {CATEGORY_ICONS[v.category] ?? "🛍️"}
@@ -291,6 +292,7 @@ export default function MarketplacePage() {
                     </div>
                   </div>
                 </div>
+                </Link>
               ))}
             </div>
           )
