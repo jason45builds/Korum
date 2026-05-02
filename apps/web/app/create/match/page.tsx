@@ -315,7 +315,7 @@ function CreateMatchInner() {
                       type="button"
                       onMouseDown={() => { window.open("/marketplace/register?type=ground", "_blank"); }}
                       style={{ width: "100%", padding: "10px 14px", border: "none", background: "transparent", cursor: "pointer", textAlign: "left", display: "flex", alignItems: "center", gap: 8, color: "var(--blue)", fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 13 }}>
-                      <span>+</span> Register "{groundQuery}" as a ground
+                      <span>+</span> Register &ldquo;{groundQuery}&rdquo; as a ground
                     </button>
                   </div>
                 )}
