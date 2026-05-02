@@ -68,6 +68,7 @@ function CreateMatchInner() {
     setGroundDropOpen(false);
   };
   const [recurringForm, setRecurringForm] = useState({ frequency: "WEEKLY", dayOfWeek: 0, timeOfDay: "07:00", generateCount: 4 });
+  const [isRecurring, setIsRecurring]     = useState(false);
   const DAYS = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
 
   // Quick-create team inline

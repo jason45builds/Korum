@@ -43,7 +43,7 @@ export async function GET(req: NextRequest) {
     //   - they marked it for "all teams" (team_ids is empty / null)
     let avQuery = admin
       .from("player_availability")
-      .select("user_id, status, match_date, match_time")
+      .select("user_id, team_id, status, match_date, match_time")
       .in("user_id", memberIds)
       .or(`team_id.eq.${teamId},team_id.is.null`);
 
