@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 
 const TABS = [
@@ -47,14 +48,11 @@ const TABS = [
     ),
   },
   {
-    href: "/tournaments",
-    label: "Cups",
+    href: "/activity",
+    label: "Activity",
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M6 9H4.5a2.5 2.5 0 010-5H6" />
-        <path d="M18 9h1.5a2.5 2.5 0 000-5H18" />
-        <path d="M4 22h16M11 4H6v7a6 6 0 0012 0V4h-5" />
-        <path d="M12 17v5" />
+        <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
       </svg>
     ),
   },
@@ -71,19 +69,29 @@ const TABS = [
 ] as const;
 
 export function BottomNav() {
+  // Use mounted to defer pathname check to client only
+  // This prevents hydration mismatch while keeping nav visible immediately
   const pathname = usePathname();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   return (
-    <nav className="bottom-nav" aria-label="Main navigation">
+    <nav className="bottom-nav" aria-label="Main navigation" suppressHydrationWarning>
       <div className="bottom-nav__inner">
         {TABS.map(({ href, label, icon }) => {
-          const active = pathname === href || pathname.startsWith(href + "/");
+          // Before mount: no active class (matches server render)
+          // After mount: correct active class based on pathname
+          const active = mounted && (pathname === href || pathname.startsWith(href + "/"));
           return (
             <Link
               key={href}
               href={href}
-              className={`bottom-nav__item ${active ? "bottom-nav__item--active" : ""}`}
+              className={`bottom-nav__item${active ? " bottom-nav__item--active" : ""}`}
               aria-current={active ? "page" : undefined}
+              suppressHydrationWarning
             >
               {icon}
               {label}

@@ -27,6 +27,15 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       <head>
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+        {/* Critical inline styles — prevent layout flash before CSS loads */}
+        <style dangerouslySetInnerHTML={{ __html: `
+          .app-header{position:sticky;top:0;z-index:50;height:56px;background:rgba(255,255,255,0.98);border-bottom:1px solid #E5E9EF;}
+          .bottom-nav{display:flex;position:fixed;bottom:0;left:0;right:0;z-index:50;height:60px;background:rgba(255,255,255,0.97);border-top:1px solid #E5E9EF;}
+          .bottom-nav__inner{display:flex;align-items:center;justify-content:space-around;height:100%;max-width:480px;margin:0 auto;padding:0 8px;}
+          .bottom-nav__item{display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 12px;min-width:52px;font-size:10px;font-weight:700;color:#98A2B3;text-decoration:none;text-transform:uppercase;letter-spacing:0.04em;}
+          .bottom-nav__item svg{width:22px;height:22px;stroke-width:1.7;}
+          main{padding-top:16px;padding-bottom:76px;}
+        ` }} />
       </head>
       <body>
 
