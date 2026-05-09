@@ -140,8 +140,8 @@ function GuestHome() {
 export default function HomePage() {
   const { profile, isAuthenticated, loading: authLoading } = useAuth();
   const { dashboardMatches, pendingPayments, loading: matchLoading, loadDashboard } = useMatch();
-  const [teams, setTeams]         = useState<TeamDetails[]>([]);
-  const [pendingAv, setPendingAv]   = useState<PendingAv[]>([]);
+  const [teams, setTeams]       = useState<TeamDetails[]>([]);
+  const [pendingAv, setPendingAv] = useState<PendingAv[]>([]);
 
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -153,10 +153,9 @@ export default function HomePage() {
       .catch(() => {});
   }, [isAuthenticated]);
 
-  // Still resolving auth — show skeleton rather than flashing guest
-  if (authLoading) return <main><Loader label="Loading…" /></main>;
-
-  // Guest mode — show value before asking for login
+  // Show guest page IMMEDIATELY — never block on auth loading
+  // When auth resolves and user IS authenticated, the content swaps in silently
+  // This eliminates the full-screen loader flash
   if (!isAuthenticated) {
     return <GuestHome />;
   }

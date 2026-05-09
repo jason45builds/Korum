@@ -19,7 +19,7 @@ export const useUserStore = create<UserStore>()(
     (set) => ({
       profile: null,
       isAuthenticated: false,
-      loading: true,
+      loading: false,
       _hydrated: false,
       setLoading:        (loading) => set({ loading }),
       setAuthenticated:  (isAuthenticated) => set({ isAuthenticated }),

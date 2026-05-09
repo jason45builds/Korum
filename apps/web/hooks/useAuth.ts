@@ -166,9 +166,9 @@ export const useAuth = () => {
   return {
     profile,
     isAuthenticated,
-    // Only show loading spinner before hydration completes OR during active check.
-    // Never show loading if persist already confirmed auth — prevents the flash.
-    loading: !_hydrated || loading,
+    // loading is only true during an active network check, not during hydration.
+    // This prevents pages from showing a full-screen loader on every navigation.
+    loading,
     error,
     refreshProfile,
     signInWithEmail,

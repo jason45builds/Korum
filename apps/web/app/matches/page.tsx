@@ -32,7 +32,7 @@ export default function MatchesPage() {
     }
   }, [isAuthenticated]);
 
-  if (!authLoading && !isAuthenticated) {
+  if (!isAuthenticated) {
     return <main><div className="page"><AuthPanel title="Sign in to see your matches" /></div></main>;
   }
   if (authLoading || (loading && dashboardMatches.length === 0)) {

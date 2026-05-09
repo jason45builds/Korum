@@ -150,16 +150,7 @@ export default function MessagesPage() {
     }
   };
 
-  if (!authLoading && !isAuthenticated) {
-    return (
-      <main>
-        <div className="page">
-          <AuthPanel title="Sign in to access messages" />
-        </div>
-      </main>
-    );
-  }
-
+  if (!isAuthenticated) return <main><div className="page"><AuthPanel title="Sign in to access messages" /></div></main>;
   if (authLoading) return <main><Loader label="Loading…" /></main>;
 
   const activeThread = activeMatchId ? threads[activeMatchId] : null;

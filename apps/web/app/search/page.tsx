@@ -79,9 +79,7 @@ export default function SearchPage() {
     } finally { setLoading(false); }
   };
 
-  if (!authLoading && !isAuthenticated) {
-    return <main><div className="page"><AuthPanel title="Sign in to search" /></div></main>;
-  }
+  if (!isAuthenticated) return <main><div className="page"><AuthPanel title="Sign in to search" /></div></main>;
 
   const total = results
     ? (results.matches.length + results.players.length + results.teams.length +

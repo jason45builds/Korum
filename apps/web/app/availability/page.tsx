@@ -186,11 +186,11 @@ export default function AvailabilityPage() {
   const toggleTeam = (id: string) =>
     setSelTeams(t => t.includes(id) ? t.filter(x => x !== id) : [...t, id]);
 
-  // ── Auth guards ──────────────────────────────────────────────────────────
-  if (!authLoading && !isAuthenticated) {
+  // Auth guards — show content immediately, don't block on loading
+  if (!isAuthenticated) {
     return <main><div className="page"><AuthPanel title="Sign in to manage your availability" /></div></main>;
   }
-  if (authLoading || loading) return <main><Loader label="Loading availability…" /></main>;
+  if (loading) return <main><Loader label="Loading availability…" /></main>;
 
   const unanswered  = pending.filter(p => !done[p.availability_checks.id]);
   const dateCountMap = new Map(calendar.map(c => [c.date, c]));
