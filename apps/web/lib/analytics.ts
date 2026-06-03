@@ -1,8 +1,8 @@
 /**
  * Korum Analytics — lightweight event tracking.
  * PostHog is loaded at runtime only when NEXT_PUBLIC_POSTHOG_KEY is set.
- * No build-time dependency — import path is constructed dynamically so
- * TypeScript cannot resolve it at compile time.
+ * The import specifier is built dynamically so TypeScript never resolves it
+ * at compile time — zero bundle impact when the key is absent.
  */
 
 type Props = Record<string, string | number | boolean | null | undefined>;
@@ -22,7 +22,7 @@ export type EventName =
 
 let _capture:  ((event: string, props?: Props) => void) | null = null;
 let _identify: ((id: string, traits?: Record<string, string | number | boolean | null>) => void) | null = null;
-let _initDone = false;
+let _initDone  = false;
 
 async function initAnalytics() {
   if (_initDone || typeof window === "undefined") return;
@@ -33,14 +33,21 @@ async function initAnalytics() {
   if (!key) return;
 
   try {
-    // Build a dynamic specifier so TypeScript never tries to type-check it.
-    // This is equivalent to a lazy CDN load — zero bundle impact when key is absent.
-    const pkg = "posthog" + "-js";
-    // eslint-disable-next-line @typescript-eslint/no-implied-eval
-    const mod = await (new Function(`return import("${pkg}")`)() as Promise<{ default?: { init: (k: string, o: object) => void; capture: (e: string, p?: Props) => void; identify: (id: string, t?: object) => void } }>).catch(() => null);
-    if (!mod) return;
+    // Construct the specifier at runtime so TypeScript's type checker never
+    // sees a static import("posthog-js") and doesn't demand the package exist.
+    // eslint-disable-next-line no-new-func
+    const loader = new Function('p', 'return import(p)') as (p: string) => Promise<unknown>;
+    const mod = await loader("posthog-js").catch(() => null) as {
+      default?: {
+        init: (k: string, o: object) => void;
+        capture: (e: string, p?: Props) => void;
+        identify: (id: string, t?: object) => void;
+      };
+    } | null;
 
-    const ph = mod.default ?? (mod as unknown as NonNullable<typeof mod["default"]>);
+    if (!mod?.default) return;
+
+    const ph = mod.default;
     ph.init(key, {
       api_host:                  host,
       capture_pageview:          true,
