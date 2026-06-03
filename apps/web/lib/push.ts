@@ -1,15 +1,10 @@
 /**
- * Korum Push Notification Sender
- * Server-side utility for sending Web Push notifications to users.
+ * Korum Push Notification Sender — server-side utility.
+ * web-push is an optional dependency loaded at runtime only.
+ * No build-time reference to the package — zero compile errors if not installed.
  *
- * Usage:
- *   import { sendPushNotification } from "@/lib/push";
- *   await sendPushNotification(userId, { title: "Payment received", body: "Rahul has paid ₹200", url: "/match/control?matchId=..." });
- *
- * VAPID keys must be set:
- *   NEXT_PUBLIC_VAPID_PUBLIC_KEY
- *   VAPID_PRIVATE_KEY
- *   VAPID_SUBJECT (e.g. mailto:hello@korum.app)
+ * Install when ready: npm install web-push --workspace @korum/web
+ * Then add to Vercel env: NEXT_PUBLIC_VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT
  */
 
 import { createAdminClient } from "@/services/supabase/server";
@@ -26,12 +21,21 @@ export type PushPayload = {
 
 type PushSubscriptionRow = {
   endpoint: string;
-  p256dh: string | null;
-  auth: string | null;
+  p256dh:   string | null;
+  auth:     string | null;
+};
+
+// Inline type for web-push so we never import the package at type-check time
+type WebPushLib = {
+  setVapidDetails: (subject: string, publicKey: string, privateKey: string) => void;
+  sendNotification: (
+    sub: { endpoint: string; keys: { p256dh: string; auth: string } },
+    payload: string,
+  ) => Promise<{ statusCode: number }>;
 };
 
 export async function sendPushNotification(
-  userId: string,
+  userId:  string,
   payload: PushPayload,
 ): Promise<void> {
   const vapidPublic  = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
@@ -39,7 +43,7 @@ export async function sendPushNotification(
   const vapidSubject = process.env.VAPID_SUBJECT ?? "mailto:hello@korum.app";
 
   if (!vapidPublic || !vapidPrivate) {
-    console.warn("[Korum Push] VAPID keys not configured — push not sent");
+    console.warn("[Korum Push] VAPID keys not configured — skipping push");
     return;
   }
 
@@ -51,40 +55,45 @@ export async function sendPushNotification(
 
   if (!subs?.length) return;
 
-  const data = JSON.stringify({
-    title:             payload.title,
-    body:              payload.body,
-    url:               payload.url ?? "/dashboard",
-    tag:               payload.tag ?? "korum",
-    requireInteraction: payload.requireInteraction ?? false,
-    icon:              payload.icon  ?? "/icons/icon-192.svg",
-    badge:             payload.badge ?? "/icons/icon-72.svg",
-  });
-
-  // Dynamic import of web-push (optional dependency)
-  let webpush: typeof import("web-push") | null = null;
+  // Load web-push dynamically — if not installed, silently skip
+  let webpush: WebPushLib | null = null;
   try {
-    webpush = await import("web-push");
-    webpush.setVapidDetails(vapidSubject, vapidPublic, vapidPrivate);
+    // eslint-disable-next-line no-new-func
+    const loader = new Function("p", "return import(p)") as (p: string) => Promise<{ default?: WebPushLib } & WebPushLib>;
+    const mod    = await loader("web-push").catch(() => null);
+    webpush      = mod?.default ?? mod ?? null;
   } catch {
+    // package not installed — no-op
+  }
+
+  if (!webpush) {
     console.warn("[Korum Push] web-push not installed. Run: npm install web-push --workspace @korum/web");
     return;
   }
+
+  webpush.setVapidDetails(vapidSubject, vapidPublic, vapidPrivate);
+
+  const data = JSON.stringify({
+    title:              payload.title,
+    body:               payload.body,
+    url:                payload.url               ?? "/dashboard",
+    tag:                payload.tag               ?? "korum",
+    requireInteraction: payload.requireInteraction ?? false,
+    icon:               payload.icon              ?? "/icons/icon-192.svg",
+    badge:              payload.badge             ?? "/icons/icon-72.svg",
+  });
 
   const results = await Promise.allSettled(
     subs.map(sub =>
       webpush!.sendNotification(
         {
           endpoint: sub.endpoint,
-          keys: {
-            p256dh: sub.p256dh ?? "",
-            auth:   sub.auth   ?? "",
-          },
+          keys: { p256dh: sub.p256dh ?? "", auth: sub.auth ?? "" },
         },
         data,
-      ).catch(async (err) => {
-        // 410 Gone = subscription expired — clean it up
+      ).catch(async (err: { statusCode?: number }) => {
         if (err.statusCode === 410) {
+          // Subscription expired — clean it up
           await admin.from("push_subscriptions").delete().eq("endpoint", sub.endpoint);
         }
         throw err;
@@ -98,9 +107,6 @@ export async function sendPushNotification(
   }
 }
 
-/**
- * Common notification templates
- */
 export const PushTemplates = {
   paymentReceived: (playerName: string, matchTitle: string, matchId: string): PushPayload => ({
     title: "💰 Payment received",
@@ -108,7 +114,6 @@ export const PushTemplates = {
     url:   `/match/control?matchId=${matchId}`,
     tag:   `payment-${matchId}`,
   }),
-
   squadFull: (matchTitle: string, matchId: string): PushPayload => ({
     title: "🔒 Squad is full!",
     body:  `${matchTitle} — time to lock the squad`,
@@ -116,7 +121,6 @@ export const PushTemplates = {
     tag:   `squad-full-${matchId}`,
     requireInteraction: true,
   }),
-
   paymentDeadline: (matchTitle: string, matchId: string, hoursLeft: number): PushPayload => ({
     title: "⏰ Payment deadline soon",
     body:  `${hoursLeft}h left to pay for ${matchTitle}`,
@@ -124,14 +128,12 @@ export const PushTemplates = {
     tag:   `deadline-${matchId}`,
     requireInteraction: true,
   }),
-
   matchReminder: (matchTitle: string, matchId: string, timeStr: string): PushPayload => ({
     title: "🏏 Match today!",
     body:  `${matchTitle} starts ${timeStr}. You're in the squad.`,
     url:   `/match/${matchId}`,
     tag:   `reminder-${matchId}`,
   }),
-
   availabilityRequest: (date: string, teamName: string): PushPayload => ({
     title: "📋 Are you available?",
     body:  `${teamName} captain is checking who's free on ${date}`,
