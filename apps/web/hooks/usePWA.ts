@@ -2,10 +2,6 @@
 
 import { useEffect } from "react";
 
-/**
- * Registers the Korum service worker and sets up push notification subscription.
- * Call this once in the root layout (client component wrapper).
- */
 export function usePWA() {
   useEffect(() => {
     if (typeof window === "undefined" || !("serviceWorker" in navigator)) return;
@@ -15,13 +11,11 @@ export function usePWA() {
         const reg = await navigator.serviceWorker.register("/sw.js", { scope: "/" });
         console.log("[Korum SW] registered, scope:", reg.scope);
 
-        // Listen for updates — prompt user to refresh when new version available
         reg.addEventListener("updatefound", () => {
           const worker = reg.installing;
           if (!worker) return;
           worker.addEventListener("statechange", () => {
             if (worker.state === "installed" && navigator.serviceWorker.controller) {
-              // New content is available — dispatch event for the UI to handle
               window.dispatchEvent(new CustomEvent("korum:sw-update"));
             }
           });
@@ -39,10 +33,6 @@ export function usePWA() {
   }, []);
 }
 
-/**
- * Request push notification permission and subscribe.
- * Returns the PushSubscription or null.
- */
 export async function requestPushPermission(): Promise<PushSubscription | null> {
   if (!("Notification" in window) || !("serviceWorker" in navigator)) return null;
 
@@ -59,10 +49,10 @@ export async function requestPushPermission(): Promise<PushSubscription | null> 
   try {
     const sub = await reg.pushManager.subscribe({
       userVisibleOnly: true,
-      applicationServerKey: urlBase64ToUint8Array(vapidKey),
+      // Cast to ArrayBuffer to satisfy the strict Uint8Array<ArrayBuffer> requirement
+      applicationServerKey: urlBase64ToUint8Array(vapidKey).buffer as ArrayBuffer,
     });
 
-    // Send subscription to our backend
     await fetch("/api/notifications/subscribe", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -79,7 +69,11 @@ export async function requestPushPermission(): Promise<PushSubscription | null> 
 
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
-  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const base64  = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
   const rawData = window.atob(base64);
-  return Uint8Array.from([...rawData].map(c => c.charCodeAt(0)));
+  const output  = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; i++) {
+    output[i] = rawData.charCodeAt(i);
+  }
+  return output;
 }

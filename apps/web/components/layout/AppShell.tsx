@@ -6,28 +6,23 @@ import { PWAInstallBanner } from "@/components/shared/PWAInstallBanner";
 import { useAuth } from "@/hooks/useAuth";
 import { identify, track } from "@/lib/analytics";
 
-/**
- * AppShell — client component that wraps the app.
- * Handles: SW registration, analytics identity, PWA banner.
- * Kept separate from layout.tsx so the server component stays clean.
- */
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { profile, isAuthenticated } = useAuth();
 
-  // Register service worker
   usePWA();
 
-  // Identify user in analytics once authenticated
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!isAuthenticated || !profile) return;
     identify(profile.id, {
-      role: profile.role ?? "player",
-      city: profile.city ?? "",
+      role:  profile.role         ?? "player",
+      city:  profile.city         ?? "",
       sport: profile.defaultSport ?? "",
     });
+  // profile.id is the stable key — re-running on full profile object causes loops
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated, profile?.id]);
 
-  // Track page views manually (PostHog autocapture is off)
   useEffect(() => {
     const handleRoute = () => {
       track("match_viewed", { path: window.location.pathname });
