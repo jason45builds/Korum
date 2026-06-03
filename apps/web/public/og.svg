@@ -1,0 +1,86 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#1e3a8a"/>
+      <stop offset="100%" stop-color="#1d4ed8"/>
+    </linearGradient>
+    <linearGradient id="card" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="rgba(255,255,255,0.12)"/>
+      <stop offset="100%" stop-color="rgba(255,255,255,0.04)"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1200" height="630" fill="url(#bg)"/>
+
+  <!-- Subtle grid pattern -->
+  <pattern id="grid" width="60" height="60" patternUnits="userSpaceOnUse">
+    <path d="M 60 0 L 0 0 0 60" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="1"/>
+  </pattern>
+  <rect width="1200" height="630" fill="url(#grid)"/>
+
+  <!-- Logo mark -->
+  <rect x="80" y="80" width="80" height="80" rx="20" fill="rgba(255,255,255,0.15)"/>
+  <text x="120" y="138" font-family="Arial,sans-serif" font-weight="900" font-size="52" fill="white" text-anchor="middle">K</text>
+
+  <!-- Brand name -->
+  <text x="180" y="130" font-family="Arial,sans-serif" font-weight="900" font-size="42" fill="white">Korum</text>
+
+  <!-- Main headline -->
+  <text x="80" y="280" font-family="Arial,sans-serif" font-weight="900" font-size="72" fill="white">Match Readiness</text>
+  <text x="80" y="370" font-family="Arial,sans-serif" font-weight="900" font-size="72" fill="white">for Amateur Sports</text>
+
+  <!-- Sub-headline -->
+  <text x="80" y="440" font-family="Arial,sans-serif" font-weight="400" font-size="28" fill="rgba(255,255,255,0.75)">Captain shares a link · Players confirm and pay · Squad locks</text>
+
+  <!-- Stat cards -->
+  <rect x="80"  y="500" width="220" height="90" rx="14" fill="url(#card)" stroke="rgba(255,255,255,0.15)" stroke-width="1.5"/>
+  <text x="190" y="540" font-family="Arial,sans-serif" font-weight="900" font-size="32" fill="white" text-anchor="middle">30s</text>
+  <text x="190" y="568" font-family="Arial,sans-serif" font-weight="400" font-size="16" fill="rgba(255,255,255,0.6)" text-anchor="middle">to create a match</text>
+
+  <rect x="320" y="500" width="220" height="90" rx="14" fill="url(#card)" stroke="rgba(255,255,255,0.15)" stroke-width="1.5"/>
+  <text x="430" y="540" font-family="Arial,sans-serif" font-weight="900" font-size="32" fill="#4ade80" text-anchor="middle">UPI</text>
+  <text x="430" y="568" font-family="Arial,sans-serif" font-weight="400" font-size="16" fill="rgba(255,255,255,0.6)" text-anchor="middle">instant payments</text>
+
+  <rect x="560" y="500" width="220" height="90" rx="14" fill="url(#card)" stroke="rgba(255,255,255,0.15)" stroke-width="1.5"/>
+  <text x="670" y="540" font-family="Arial,sans-serif" font-weight="900" font-size="32" fill="#fbbf24" text-anchor="middle">Auto</text>
+  <text x="670" y="568" font-family="Arial,sans-serif" font-weight="400" font-size="16" fill="rgba(255,255,255,0.6)" text-anchor="middle">squad lock</text>
+
+  <!-- Right side — mock match card -->
+  <rect x="840" y="140" width="300" height="380" rx="20" fill="rgba(255,255,255,0.1)" stroke="rgba(255,255,255,0.2)" stroke-width="1.5"/>
+  <rect x="840" y="140" width="300" height="6" rx="3" fill="#4ade80"/>
+  <text x="990" y="200" font-family="Arial,sans-serif" font-weight="900" font-size="20" fill="white" text-anchor="middle">Sunday League · Week 4</text>
+  <text x="990" y="228" font-family="Arial,sans-serif" font-weight="400" font-size="14" fill="rgba(255,255,255,0.6)" text-anchor="middle">📅 Sun 6 Apr · 6:00 AM</text>
+  <text x="990" y="252" font-family="Arial,sans-serif" font-weight="400" font-size="14" fill="rgba(255,255,255,0.6)" text-anchor="middle">📍 Marina Ground, Chennai</text>
+
+  <!-- Mini stats -->
+  <rect x="860" y="272" width="80" height="60" rx="10" fill="rgba(255,255,255,0.08)"/>
+  <text x="900" y="298" font-family="Arial,sans-serif" font-weight="900" font-size="24" fill="#4ade80" text-anchor="middle">9</text>
+  <text x="900" y="318" font-family="Arial,sans-serif" font-size="11" fill="rgba(255,255,255,0.5)" text-anchor="middle">Confirmed</text>
+
+  <rect x="950" y="272" width="80" height="60" rx="10" fill="rgba(255,255,255,0.08)"/>
+  <text x="990" y="298" font-family="Arial,sans-serif" font-weight="900" font-size="24" fill="#fbbf24" text-anchor="middle">2</text>
+  <text x="990" y="318" font-family="Arial,sans-serif" font-size="11" fill="rgba(255,255,255,0.5)" text-anchor="middle">Pending</text>
+
+  <rect x="1040" y="272" width="80" height="60" rx="10" fill="rgba(255,255,255,0.08)"/>
+  <text x="1080" y="298" font-family="Arial,sans-serif" font-weight="900" font-size="24" fill="white" text-anchor="middle">0</text>
+  <text x="1080" y="318" font-family="Arial,sans-serif" font-size="11" fill="rgba(255,255,255,0.5)" text-anchor="middle">Slots left</text>
+
+  <!-- Progress bar -->
+  <rect x="860" y="348" width="260" height="6" rx="3" fill="rgba(255,255,255,0.15)"/>
+  <rect x="860" y="348" width="213" height="6" rx="3" fill="#4ade80"/>
+
+  <!-- CTA buttons mock -->
+  <rect x="860" y="368" width="124" height="40" rx="10" fill="#2563EB"/>
+  <text x="922" y="392" font-family="Arial,sans-serif" font-weight="700" font-size="13" fill="white" text-anchor="middle">Control Panel</text>
+
+  <rect x="994" y="368" width="124" height="40" rx="10" fill="rgba(255,255,255,0.1)" stroke="rgba(255,255,255,0.3)" stroke-width="1"/>
+  <text x="1056" y="392" font-family="Arial,sans-serif" font-weight="700" font-size="13" fill="white" text-anchor="middle">Share Link</text>
+
+  <!-- WhatsApp share button mock -->
+  <rect x="860" y="420" width="260" height="48" rx="12" fill="#25D366"/>
+  <text x="990" y="450" font-family="Arial,sans-serif" font-weight="800" font-size="16" fill="white" text-anchor="middle">📲 Share to WhatsApp</text>
+
+  <!-- URL -->
+  <text x="990" y="560" font-family="Arial,sans-serif" font-weight="600" font-size="18" fill="rgba(255,255,255,0.5)" text-anchor="middle">korum.vercel.app</text>
+</svg>

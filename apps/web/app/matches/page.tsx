@@ -5,12 +5,22 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 
 import { AuthPanel } from "@/components/shared/AuthPanel";
-import { Loader } from "@/components/shared/Loader";
+import { MatchesPageSkeleton } from "@/components/shared/Skeletons";
 import { useAuth } from "@/hooks/useAuth";
 import { useMatch } from "@/hooks/useMatch";
+import { track } from "@/lib/analytics";
 import type { MatchSummary } from "@korum/types/match";
 
 type Filter = "all" | "captain" | "player" | "locked";
+
+const STATUS_LABELS: Record<string, string> = {
+  DRAFT: "Draft", RSVP_OPEN: "Open", PAYMENT_PENDING: "Awaiting payment",
+  LOCKED: "Locked", READY: "Ready", CANCELLED: "Cancelled",
+};
+const STATUS_BADGE: Record<string, string> = {
+  RSVP_OPEN: "badge-blue", PAYMENT_PENDING: "badge-amber",
+  LOCKED: "badge-green", READY: "badge-green", CANCELLED: "badge-red",
+};
 
 const fmt = (s: string) => {
   if (!s) return "";
@@ -26,24 +36,16 @@ export default function MatchesPage() {
 
   useEffect(() => {
     if (!isAuthenticated || loadedRef.current) return;
-    if (dashboardMatches.length === 0) {
-      loadedRef.current = true;
-      void loadDashboard();
-    }
+    if (dashboardMatches.length === 0) { loadedRef.current = true; void loadDashboard(); }
+    track("match_viewed", { path: "/matches" });
   }, [isAuthenticated]);
 
-  if (!isAuthenticated) {
-    return <main><div className="page"><AuthPanel title="Sign in to see your matches" /></div></main>;
-  }
-  if (authLoading || (loading && dashboardMatches.length === 0)) {
-    return <main><Loader label="Loading matches…" /></main>;
-  }
+  if (!isAuthenticated) return <main><div className="page"><AuthPanel title="Sign in to see your matches" /></div></main>;
+  if (authLoading || (loading && dashboardMatches.length === 0)) return <main><MatchesPageSkeleton /></main>;
 
   const tabs: { id: Filter; label: string }[] = [
-    { id: "all",     label: "All" },
-    { id: "captain", label: "Captain" },
-    { id: "player",  label: "Player" },
-    { id: "locked",  label: "Locked" },
+    { id: "all", label: "All" }, { id: "captain", label: "Captain" },
+    { id: "player", label: "Player" }, { id: "locked", label: "Locked" },
   ];
 
   const filtered = dashboardMatches.filter(m => {
@@ -58,25 +60,19 @@ export default function MatchesPage() {
   return (
     <main>
       <div className="page">
-        {/* Header */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <h1 className="t-h2">Matches</h1>
-          <Link href="/create/match">
-            <button className="btn btn--primary btn--sm">+ New</button>
-          </Link>
+          <Link href="/create/match"><button className="btn btn--primary btn--sm">+ New</button></Link>
         </div>
 
-        {/* Filter tabs */}
         <div className="tab-bar">
           {tabs.map(t => (
-            <button key={t.id} className={`tab ${filter === t.id ? "tab--active" : ""}`}
-              onClick={() => setFilter(t.id)}>
+            <button key={t.id} className={`tab ${filter === t.id ? "tab--active" : ""}`} onClick={() => setFilter(t.id)}>
               {t.label}
             </button>
           ))}
         </div>
 
-        {/* Match list */}
         {filtered.length === 0 ? (
           <div className="card card-pad animate-in" style={{ textAlign: "center", padding: "36px 20px" }}>
             <div style={{ fontSize: 36, marginBottom: 12 }}>🏏</div>
@@ -87,9 +83,7 @@ export default function MatchesPage() {
           </div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            {filtered.map(m => (
-              <MatchListCard key={m.id} match={m} isCaptain={captainIds.has(m.id)} />
-            ))}
+            {filtered.map(m => <MatchListCard key={m.id} match={m} isCaptain={captainIds.has(m.id)} />)}
           </div>
         )}
       </div>
@@ -103,12 +97,10 @@ function MatchListCard({ match, isCaptain }: { match: MatchSummary; isCaptain: b
   const pending   = match.pendingCount ?? 0;
   const pct       = total > 0 ? Math.min((confirmed / total) * 100, 100) : 0;
   const isLocked  = match.status === "LOCKED" || match.status === "READY";
-
-  const accentCls = isLocked ? "match-card__accent--locked"
-    : isCaptain && pending > 0 ? "match-card__accent--amber"
-    : "match-card__accent";
-
-  const href = isCaptain ? `/match/control?matchId=${match.id}` : `/match/${match.id}`;
+  const accentCls = isLocked ? "match-card__accent--locked" : isCaptain && pending > 0 ? "match-card__accent--amber" : "match-card__accent";
+  const href      = isCaptain ? `/match/control?matchId=${match.id}` : `/match/${match.id}`;
+  const statusLabel = STATUS_LABELS[match.status] ?? match.status.replace(/_/g, " ");
+  const badgeClass  = STATUS_BADGE[match.status] ?? "";
 
   return (
     <Link href={href} className="match-card animate-in">
@@ -124,32 +116,15 @@ function MatchListCard({ match, isCaptain }: { match: MatchSummary; isCaptain: b
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 4, alignItems: "flex-end", flexShrink: 0 }}>
             {isCaptain && <span className="badge badge-blue">Captain</span>}
-            <span className={`badge ${isLocked ? "badge-green" : match.status === "PAYMENT_PENDING" ? "badge-amber" : ""}`}>
-              {isLocked ? "Locked" : match.status.replace(/_/g, " ")}
-            </span>
+            <span className={`badge ${badgeClass}`}>{isLocked ? "Locked ✅" : statusLabel}</span>
           </div>
         </div>
-
         <div className="stats-strip">
-          <div className="stats-strip__item">
-            <span className="stats-strip__num" style={{ color: "var(--green)" }}>{confirmed}</span>
-            <span className="stats-strip__label">Confirmed</span>
-          </div>
-          <div className="stats-strip__item">
-            <span className="stats-strip__num" style={{ color: pending > 0 ? "var(--amber)" : "var(--text-4)" }}>{pending}</span>
-            <span className="stats-strip__label">Pending</span>
-          </div>
-          <div className="stats-strip__item">
-            <span className="stats-strip__num" style={{ color: "var(--text-2)" }}>
-              {match.pricePerPlayer > 0 ? `₹${match.pricePerPlayer}` : "Free"}
-            </span>
-            <span className="stats-strip__label">Per player</span>
-          </div>
+          <div className="stats-strip__item"><span className="stats-strip__num" style={{ color: "var(--green)" }}>{confirmed}</span><span className="stats-strip__label">Confirmed</span></div>
+          <div className="stats-strip__item"><span className="stats-strip__num" style={{ color: pending > 0 ? "var(--amber)" : "var(--text-4)" }}>{pending}</span><span className="stats-strip__label">Pending</span></div>
+          <div className="stats-strip__item"><span className="stats-strip__num" style={{ color: "var(--text-2)" }}>{match.pricePerPlayer > 0 ? `₹${match.pricePerPlayer}` : "Free"}</span><span className="stats-strip__label">Per player</span></div>
         </div>
-
-        <div className="progress">
-          <div className="progress__fill progress__fill--green" style={{ width: `${pct}%` }} />
-        </div>
+        <div className="progress"><div className="progress__fill progress__fill--green" style={{ width: `${pct}%` }} /></div>
       </div>
     </Link>
   );

@@ -3,6 +3,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { useAuth } from "@/hooks/useAuth";
 import { AuthPanel } from "@/components/shared/AuthPanel";
 import { Loader } from "@/components/shared/Loader";
@@ -27,7 +28,6 @@ export default function ProfilePage() {
       fd.append("avatar", file);
       const res = await fetch("/api/upload/avatar", { method: "POST", credentials: "same-origin", body: fd });
       if (!res.ok) { const d = await res.json() as { error?: string }; throw new Error(d.error ?? "Upload failed"); }
-      // Reload profile to get new avatar URL
       window.location.reload();
     } catch (err) {
       alert(err instanceof Error ? err.message : "Upload failed");
@@ -106,14 +106,18 @@ export default function ProfilePage() {
 
         {/* Avatar + name */}
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", padding: "24px 0 8px", textAlign: "center" }}>
-          {/* Tappable avatar with upload */}
           <div style={{ position: "relative", marginBottom: 14 }}>
             <div
               onClick={() => fileInputRef.current?.click()}
               style={{ width: 80, height: 80, borderRadius: "50%", overflow: "hidden", border: "3px solid var(--blue-border)", cursor: "pointer", position: "relative", background: "var(--blue-soft)" }}>
               {profile?.avatarUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={profile.avatarUrl} alt="Avatar" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                <Image
+                  src={profile.avatarUrl}
+                  alt="Profile photo"
+                  fill
+                  style={{ objectFit: "cover" }}
+                  sizes="80px"
+                />
               ) : (
                 <div style={{ width: "100%", height: "100%", display: "grid", placeItems: "center", fontFamily: "var(--font-display)", fontWeight: 900, fontSize: 28, color: "var(--blue)" }}>
                   {ini(profile?.displayName)}
@@ -195,7 +199,6 @@ export default function ProfilePage() {
                 </select>
               </div>
 
-              {/* UPI section */}
               <div style={{ padding: "12px 14px", background: "var(--amber-soft)", borderRadius: "var(--r-md)", border: "1px solid var(--amber-border)" }}>
                 <p style={{ margin: "0 0 10px", fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 13, color: "#92400e" }}>💰 Payment details (for captains)</p>
                 <div className="field" style={{ marginBottom: 8 }}>
@@ -224,15 +227,11 @@ export default function ProfilePage() {
           </div>
         ) : (
           <div className="card" style={{ overflow: "hidden" }}>
-            {[
-              { icon: "✏️", label: "Edit Profile", action: () => setEditing(true) },
-            ].map(({ icon, label, action }) => (
-              <div key={label} onClick={action} style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 16px", borderBottom: "1px solid var(--line)", cursor: "pointer" }}>
-                <span style={{ fontSize: 18, width: 28, textAlign: "center" }}>{icon}</span>
-                <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 14, flex: 1 }}>{label}</span>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-4)" strokeWidth="2.5" strokeLinecap="round"><path d="M9 18l6-6-6-6" /></svg>
-              </div>
-            ))}
+            <div onClick={() => setEditing(true)} style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 16px", borderBottom: "1px solid var(--line)", cursor: "pointer" }}>
+              <span style={{ fontSize: 18, width: 28, textAlign: "center" }}>✏️</span>
+              <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 14, flex: 1 }}>Edit Profile</span>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--text-4)" strokeWidth="2.5" strokeLinecap="round"><path d="M9 18l6-6-6-6" /></svg>
+            </div>
           </div>
         )}
 

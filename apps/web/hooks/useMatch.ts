@@ -17,7 +17,6 @@ import {
 } from "@/services/api/match";
 import { useMatchStore } from "@/store/matchStore";
 
-// Local loading per-hook instance to avoid global loading bleed
 const useLocalLoading = () => {
   const [loading, setLoading] = useState(false);
   return { loading, setLoading };
@@ -48,20 +47,25 @@ export const useMatch = (matchId?: string | null) => {
     setLoading,
   } = useMatchStore();
 
-  const loadMatch = useCallback(async (params: { matchId?: string; joinCode?: string }) => {
-    setLocalLoading(true);
-    try {
-      const response = await getMatchDetail(params);
-      setActiveMatch(response.match);
-      setError(null);
-      return response.match;
-    } catch (currentError) {
-      setError(toErrorMessage(currentError));
-      throw currentError;
-    } finally {
-      setLocalLoading(false);
-    }
-  }, [setActiveMatch, setError, setLocalLoading]);
+  const loadMatch = useCallback(
+    async (params: { matchId?: string; joinCode?: string }) => {
+      // Clear stale match immediately so pages never flash old data
+      setActiveMatch(null);
+      setLocalLoading(true);
+      try {
+        const response = await getMatchDetail(params);
+        setActiveMatch(response.match);
+        setError(null);
+        return response.match;
+      } catch (currentError) {
+        setError(toErrorMessage(currentError));
+        throw currentError;
+      } finally {
+        setLocalLoading(false);
+      }
+    },
+    [setActiveMatch, setError, setLocalLoading],
+  );
 
   const loadDashboard = useCallback(async () => {
     setLoading(true);
@@ -84,15 +88,14 @@ export const useMatch = (matchId?: string | null) => {
     return response.matches;
   }, []);
 
-  // Load match detail only once per matchId — no realtime loop
+  // Load match detail only once per matchId
   useEffect(() => {
     if (!matchId) return;
-    if (fetchedRef.current === matchId) return; // already fetched
+    if (fetchedRef.current === matchId) return;
     fetchedRef.current = matchId;
     void loadMatch({ matchId }).catch(() => undefined);
   }, [matchId]);
 
-  // loading = local for match detail, global for dashboard
   const loading = matchId ? localLoading : globalLoading;
 
   return {

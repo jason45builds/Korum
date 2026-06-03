@@ -1,0 +1,35 @@
+{
+  "name": "Korum",
+  "short_name": "Korum",
+  "description": "Match Readiness for Amateur Sports. Build your squad before kickoff.",
+  "start_url": "/dashboard",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#F4F6F9",
+  "theme_color": "#2563EB",
+  "lang": "en-IN",
+  "categories": ["sports", "social"],
+  "icons": [
+    { "src": "/icons/icon-72.svg",  "sizes": "72x72",   "type": "image/svg+xml", "purpose": "any" },
+    { "src": "/icons/icon-192.svg", "sizes": "192x192", "type": "image/svg+xml", "purpose": "any maskable" },
+    { "src": "/icons/icon-512.svg", "sizes": "512x512", "type": "image/svg+xml", "purpose": "any maskable" }
+  ],
+  "shortcuts": [
+    {
+      "name": "Create Match",
+      "short_name": "Create",
+      "description": "Set up a new match in 30 seconds",
+      "url": "/create/match",
+      "icons": [{ "src": "/icons/icon-72.svg", "sizes": "72x72" }]
+    },
+    {
+      "name": "Join Match",
+      "short_name": "Join",
+      "description": "Join a match via invite code",
+      "url": "/match/join",
+      "icons": [{ "src": "/icons/icon-72.svg", "sizes": "72x72" }]
+    }
+  ],
+  "prefer_related_applications": false
+}

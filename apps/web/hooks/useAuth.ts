@@ -9,6 +9,7 @@ import type { UserProfile } from "@korum/types/user";
 
 export const useAuth = () => {
   const [error, setError] = useState<string | null>(null);
+  const [timedOut, setTimedOut] = useState(false);
   const initialised = useRef(false);
   const {
     profile,
@@ -29,21 +30,18 @@ export const useAuth = () => {
   };
 
   useEffect(() => {
-    // Wait for Zustand to finish reading localStorage before doing anything.
-    // Without this guard, we see a flash of unauthenticated state on every
-    // page load even when the user is already signed in.
     if (!_hydrated) return;
-
     if (initialised.current) return;
     initialised.current = true;
 
-    // If persist already gave us a valid session, just verify it quietly
-    // in the background rather than showing a loading spinner.
     const skipSpinner = isAuthenticated && !!profile;
-
     if (!skipSpinner) setLoading(true);
 
-    const timeout = setTimeout(() => setLoading(false), 8000);
+    // If still loading after 8s, stop spinner and show a connection error
+    const timeout = setTimeout(() => {
+      setLoading(false);
+      setTimedOut(true);
+    }, 8000);
 
     const run = async () => {
       try {
@@ -55,15 +53,13 @@ export const useAuth = () => {
         if (sessionError) throw sessionError;
 
         if (!session?.user) {
-          // No live Supabase session — clear persisted state
           reset();
           return;
         }
 
         setAuthenticated(true);
+        setTimedOut(false);
 
-        // If we already have the profile from persist, refresh it silently
-        // so we don't block rendering
         if (skipSpinner) {
           void refreshProfile().catch(() => {});
         } else {
@@ -81,7 +77,6 @@ export const useAuth = () => {
 
     void run();
 
-    // Subscribe to Supabase auth state changes (sign in / sign out)
     let unsubscribe: (() => void) | null = null;
     void import("@/services/supabase/client").then(({ getSupabaseBrowserClient }) => {
       try {
@@ -89,6 +84,7 @@ export const useAuth = () => {
         const { data: { subscription } } = client.auth.onAuthStateChange((_event, session) => {
           if (!session?.user) { reset(); return; }
           setAuthenticated(true);
+          setTimedOut(false);
           void refreshProfile().catch((e) => setError(toErrorMessage(e)));
         });
         unsubscribe = () => subscription.unsubscribe();
@@ -99,7 +95,6 @@ export const useAuth = () => {
       clearTimeout(timeout);
       unsubscribe?.();
     };
-  // Only re-run when hydration completes
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [_hydrated]);
 
@@ -166,9 +161,8 @@ export const useAuth = () => {
   return {
     profile,
     isAuthenticated,
-    // loading is only true during an active network check, not during hydration.
-    // This prevents pages from showing a full-screen loader on every navigation.
     loading,
+    timedOut,
     error,
     refreshProfile,
     signInWithEmail,

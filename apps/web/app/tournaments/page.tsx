@@ -1,7 +1,7 @@
 "use client";
 /* eslint-disable react-hooks/exhaustive-deps */
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "@/hooks/useAuth";
 import { Loader } from "@/components/shared/Loader";
@@ -34,20 +34,29 @@ const fmtDate = (d: string) => {
 export default function TournamentsPage() {
   const { isAuthenticated } = useAuth();
 
-  const [tournaments, setTournaments] = useState<Tournament[]>([]);
-  const [loading, setLoading]         = useState(true);
-  const [sportFilter, setSportFilter] = useState("");
-  const [cityFilter, setCityFilter]   = useState("");
-  const [tab, setTab]                 = useState<"all" | "mine">("all");
+  const [tournaments, setTournaments]     = useState<Tournament[]>([]);
+  const [loading, setLoading]             = useState(true);
+  const [sportFilter, setSportFilter]     = useState("");
+  const [cityFilter, setCityFilter]       = useState("");
+  const [cityDebounced, setCityDebounced] = useState("");
+  const [tab, setTab]                     = useState<"all" | "mine">("all");
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  useEffect(() => { void load(); }, [tab, sportFilter, cityFilter]);
+  // Issue #19: debounce city input — don't fire on every keystroke
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => setCityDebounced(cityFilter), 350);
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+  }, [cityFilter]);
+
+  useEffect(() => { void load(); }, [tab, sportFilter, cityDebounced]);
 
   const load = async () => {
     setLoading(true);
     try {
       const params = new URLSearchParams();
-      if (sportFilter) params.set("sport", sportFilter);
-      if (cityFilter)  params.set("city", cityFilter);
+      if (sportFilter)   params.set("sport", sportFilter);
+      if (cityDebounced) params.set("city", cityDebounced);
       if (tab === "mine") params.set("my", "true");
       const res  = await fetch(`/api/tournaments?${params}`, { credentials: "same-origin" });
       const data = await res.json() as { tournaments: Tournament[] };
@@ -62,7 +71,7 @@ export default function TournamentsPage() {
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
           <div>
             <h1 className="t-h2">Tournaments</h1>
-            <p className="t-caption" style={{ marginTop: 4 }}>Find tournaments to compete in or organise your own</p>
+            <p className="t-caption" style={{ marginTop: 4, color: "var(--text-3)" }}>Find tournaments to compete in or organise your own</p>
           </div>
           {isAuthenticated && (
             <Link href="/tournaments/create">
@@ -73,10 +82,9 @@ export default function TournamentsPage() {
           )}
         </div>
 
-        {/* Tabs */}
         {isAuthenticated && (
           <div className="tab-bar">
-            <button className={`tab ${tab === "all" ? "tab--active" : ""}`} onClick={() => setTab("all")}>All Tournaments</button>
+            <button className={`tab ${tab === "all"  ? "tab--active" : ""}`} onClick={() => setTab("all")}>All Tournaments</button>
             <button className={`tab ${tab === "mine" ? "tab--active" : ""}`} onClick={() => setTab("mine")}>My Tournaments</button>
           </div>
         )}
@@ -87,7 +95,8 @@ export default function TournamentsPage() {
             <option value="">All sports</option>
             {SPORT_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
-          <input className="input" placeholder="City…" value={cityFilter} onChange={e => setCityFilter(e.target.value)} style={{ flex: 1 }} />
+          <input className="input" placeholder="City…" value={cityFilter}
+            onChange={e => setCityFilter(e.target.value)} style={{ flex: 1 }} />
         </div>
 
         {loading ? (
@@ -127,13 +136,11 @@ export default function TournamentsPage() {
                           {sc.label}
                         </span>
                       </div>
-
                       <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
                         <span className="badge">{t.sport}</span>
                         <span className="badge">{FORMAT_LABELS[t.format] ?? t.format}</span>
                         <span className="badge">{fmtDate(t.starts_on)}</span>
                       </div>
-
                       <div className="stats-strip">
                         <div className="stats-strip__item">
                           <span className="stats-strip__num">{t.registeredTeams}/{t.max_teams}</span>

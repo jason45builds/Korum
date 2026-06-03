@@ -1,9 +1,8 @@
 "use client";
-/* eslint-disable react-hooks/exhaustive-deps */
 
 import Link from "next/link";
 import { useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 
 import { AuthPanel } from "@/components/shared/AuthPanel";
 import { Loader } from "@/components/shared/Loader";
@@ -18,16 +17,36 @@ const fmt = (s: string) => {
 const ini = (name: string) =>
   name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2);
 
+// Human-readable status labels (issue #17, #33, #38)
+const STATUS_LABELS: Record<string, string> = {
+  DRAFT:           "Draft",
+  RSVP_OPEN:       "Open for RSVPs",
+  PAYMENT_PENDING: "Awaiting payments",
+  LOCKED:          "Squad locked",
+  READY:           "Match ready",
+  CANCELLED:       "Cancelled",
+};
+
+const STATUS_BADGE_CLASS: Record<string, string> = {
+  RSVP_OPEN:       "badge-blue",
+  PAYMENT_PENDING: "badge-amber",
+  LOCKED:          "badge-green",
+  READY:           "badge-green",
+  CANCELLED:       "badge-red",
+};
+
 export default function MatchPage() {
   const { id }    = useParams<{ id: string }>();
+  const router    = useRouter();
   const { profile, isAuthenticated, loading: authLoading } = useAuth();
-  const { activeMatch, loading } = useMatch(id);
+  const { activeMatch, loading, loadMatch } = useMatch(id);
 
-  // ── ALL hooks before any early return ──────────────────────────────────────
+  const [joining,     setJoining]     = useState(false);
+  const [joinError,   setJoinError]   = useState<string | null>(null);
   const [droppingOut, setDroppingOut] = useState(false);
   const [droppedOut,  setDroppedOut]  = useState(false);
+  const [dropError,   setDropError]   = useState<string | null>(null);
 
-  // ── Early returns AFTER all hooks ──────────────────────────────────────────
   if (loading && !activeMatch) return <main><Loader label="Loading match…" /></main>;
 
   if (!activeMatch) {
@@ -51,30 +70,66 @@ export default function MatchPage() {
 
   if (authLoading) return <main><Loader label="Checking session…" /></main>;
 
-  // ── Derived state ──────────────────────────────────────────────────────────
-  const confirmed = activeMatch.participants.filter(p => ["CONFIRMED","LOCKED"].includes(p.status));
-  const pending   = activeMatch.participants.filter(p => p.status === "PAYMENT_PENDING");
-  const slotsLeft = Math.max(0, activeMatch.squadSize - confirmed.length);
-  const isLocked  = activeMatch.status === "LOCKED" || activeMatch.status === "READY";
-  const isCaptain = isAuthenticated && activeMatch.captainId === profile?.id;
-  const me        = isAuthenticated ? activeMatch.participants.find(p => p.userId === profile?.id) : null;
+  const confirmed   = activeMatch.participants.filter(p => ["CONFIRMED","LOCKED"].includes(p.status));
+  const pending     = activeMatch.participants.filter(p => p.status === "PAYMENT_PENDING");
+  const slotsLeft   = Math.max(0, activeMatch.squadSize - confirmed.length);
+  const isLocked    = activeMatch.status === "LOCKED" || activeMatch.status === "READY";
+  const isCaptain   = isAuthenticated && activeMatch.captainId === profile?.id;
+  const me          = isAuthenticated ? activeMatch.participants.find(p => p.userId === profile?.id) : null;
   const meConfirmed = me && ["CONFIRMED","LOCKED"].includes(me.status);
   const mePending   = me?.status === "PAYMENT_PENDING";
-  const pct = activeMatch.squadSize > 0
+  const pct         = activeMatch.squadSize > 0
     ? Math.min((confirmed.length / activeMatch.squadSize) * 100, 100) : 0;
   const accentColor = isLocked ? "var(--green)" : pending.length > 0 ? "var(--amber)" : "var(--blue)";
+  const statusLabel = STATUS_LABELS[activeMatch.status] ?? activeMatch.status.replace(/_/g, " ");
+  const badgeClass  = STATUS_BADGE_CLASS[activeMatch.status] ?? "";
 
-  const handleDropOut = async () => {
-    if (!confirm("Are you sure? Dropping out after confirming will affect your reliability score.")) return;
-    setDroppingOut(true);
+  // Issue #6 & #7: inline join → redirect to payment, then reload match
+  const handleImIn = async () => {
+    if (!isAuthenticated) {
+      router.push(`/auth?redirect=/match/${id}&reason=join`);
+      return;
+    }
+    setJoining(true);
+    setJoinError(null);
     try {
-      await fetch("/api/participants/drop-out", {
+      const res  = await fetch("/api/match/join", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "same-origin",
         body: JSON.stringify({ matchId: id }),
       });
+      const data = await res.json() as { match?: { id: string }; participant?: { status: string }; error?: string };
+      if (!res.ok) throw new Error(data.error ?? "Could not join");
+      // Reload match so participant state is fresh before navigating
+      if (activeMatch.pricePerPlayer > 0) {
+        router.push(`/match/payment?matchId=${id}`);
+      } else {
+        // Free match — reload and show confirmed state
+        void loadMatch({ matchId: id });
+      }
+    } catch (e) {
+      setJoinError(e instanceof Error ? e.message : "Could not join. Try again.");
+      setJoining(false);
+    }
+  };
+
+  const handleDropOut = async () => {
+    if (!confirm("Are you sure? Dropping out after confirming will affect your reliability score.")) return;
+    setDroppingOut(true);
+    setDropError(null);
+    try {
+      const res  = await fetch("/api/participants/drop-out", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({ matchId: id }),
+      });
+      const data = await res.json() as { success?: boolean; error?: string };
+      if (!res.ok) throw new Error(data.error ?? "Failed to drop out");
       setDroppedOut(true);
+    } catch (e) {
+      setDropError(e instanceof Error ? e.message : "Something went wrong. Try again.");
     } finally { setDroppingOut(false); }
   };
 
@@ -82,7 +137,7 @@ export default function MatchPage() {
     <main>
       <div className="page">
 
-        {/* ── Match header card ── */}
+        {/* Match header card */}
         <div className="card animate-in" style={{ overflow: "hidden" }}>
           <div style={{ height: 4, background: accentColor }} />
           <div className="card-pad">
@@ -101,13 +156,12 @@ export default function MatchPage() {
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 6, alignItems: "flex-end", flexShrink: 0 }}>
                 {isCaptain && <span className="badge badge-blue">Captain</span>}
-                <span className={`badge ${isLocked ? "badge-green" : pending.length > 0 ? "badge-amber" : ""}`}>
-                  {isLocked ? "Locked ✅" : activeMatch.status.replace(/_/g, " ")}
+                <span className={`badge ${badgeClass}`}>
+                  {isLocked ? "Locked ✅" : statusLabel}
                 </span>
               </div>
             </div>
 
-            {/* Stats strip */}
             <div className="stats-strip">
               <div className="stats-strip__item">
                 <span className="stats-strip__num" style={{ color: "var(--green)" }}>{confirmed.length}</span>
@@ -129,7 +183,7 @@ export default function MatchPage() {
           </div>
         </div>
 
-        {/* ── CTA block ── */}
+        {/* CTA block */}
         {!isAuthenticated ? (
           <div className="card card-pad animate-in">
             <p style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 16, marginBottom: 4 }}>Join this match</p>
@@ -144,6 +198,11 @@ export default function MatchPage() {
               <p style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 16, color: "var(--green)" }}>You&apos;re confirmed!</p>
               <p className="t-caption" style={{ marginTop: 4 }}>Your spot is locked. See you on the field.</p>
             </div>
+            {dropError && (
+              <p style={{ margin: 0, padding: "8px 12px", background: "var(--red-soft)", border: "1px solid var(--red-border)", borderRadius: "var(--r-sm)", fontSize: 13, color: "var(--red)", fontWeight: 600 }}>
+                {dropError}
+              </p>
+            )}
             {!isLocked && (
               <button
                 onClick={() => void handleDropOut()}
@@ -174,28 +233,40 @@ export default function MatchPage() {
             </Link>
           </div>
 
-        ) : !me && slotsLeft > 0 ? (
+        ) : !me && slotsLeft > 0 && !isLocked ? (
           <div className="card card-pad animate-in" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-            <Link href={`/match/join?matchId=${activeMatch.id}`}>
-              <button className="btn-yes">✅ I&apos;m In</button>
-            </Link>
+            {joinError && (
+              <p style={{ margin: 0, padding: "8px 12px", background: "var(--red-soft)", border: "1px solid var(--red-border)", borderRadius: "var(--r-sm)", fontSize: 13, color: "var(--red)", fontWeight: 600 }}>
+                {joinError}
+              </p>
+            )}
             <button
-              className="btn-no"
-              onClick={() => {
-                // Player declines — no join, no action needed, just visual feedback
-                window.history.back();
-              }}>
+              className="btn-yes"
+              disabled={joining}
+              onClick={() => void handleImIn()}
+              style={{ opacity: joining ? 0.7 : 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+              {joining ? (
+                <><span style={{ width: 18, height: 18, border: "2px solid rgba(255,255,255,0.4)", borderTopColor: "#fff", borderRadius: "50%", animation: "spin 0.7s linear infinite" }} /> Joining…</>
+              ) : (
+                activeMatch.pricePerPlayer > 0
+                  ? `✅ I'm In — Pay ₹${activeMatch.pricePerPlayer}`
+                  : "✅ I'm In — Free Match"
+              )}
+            </button>
+            <button className="btn-no" onClick={() => window.history.back()}>
               ❌ Can&apos;t Play
             </button>
           </div>
 
-        ) : !me && slotsLeft === 0 ? (
+        ) : !me && (slotsLeft === 0 || isLocked) ? (
           <div className="card card-pad animate-in" style={{ textAlign: "center" }}>
-            <p className="t-body" style={{ color: "var(--text-3)" }}>Squad is full. No slots left.</p>
+            <p className="t-body" style={{ color: "var(--text-3)" }}>
+              {isLocked ? "This match is locked — no new players." : "Squad is full. No slots left."}
+            </p>
           </div>
         ) : null}
 
-        {/* ── Captain quick actions ── */}
+        {/* Captain quick actions */}
         {isCaptain && (
           <div style={{ display: "flex", gap: 10 }}>
             <Link href={`/match/control?matchId=${activeMatch.id}`} style={{ flex: 1 }}>
@@ -207,8 +278,8 @@ export default function MatchPage() {
           </div>
         )}
 
-        {/* WhatsApp invite button — for non-captains and always visible when match has a slot */}
-        {isAuthenticated && !isCaptain && slotsLeft > 0 && (
+        {/* WhatsApp share button for non-captains */}
+        {isAuthenticated && !isCaptain && slotsLeft > 0 && !isLocked && (
           <button
             onClick={() => {
               const text = `🏐 ${activeMatch.title} — ${slotsLeft} slot${slotsLeft > 1 ? "s" : ""} left!\n📅 ${new Date(activeMatch.startsAt).toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" })}${activeMatch.venueName ? `\n📍 ${activeMatch.venueName}` : ""}\n\nJoin the match 👉 ${window.location.href}`;
@@ -220,7 +291,7 @@ export default function MatchPage() {
           </button>
         )}
 
-        {/* ── Strategy room for all confirmed players after lock ── */}
+        {/* Strategy room for confirmed players after lock */}
         {isLocked && isAuthenticated && !isCaptain && (
           <Link href={`/match/room?matchId=${activeMatch.id}`}>
             <div className="card" style={{ padding: "14px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer" }}>
@@ -238,7 +309,7 @@ export default function MatchPage() {
           </Link>
         )}
 
-        {/* ── Player list ── */}
+        {/* Player list */}
         <div className="card animate-in" style={{ overflow: "hidden" }}>
           <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--line)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <p style={{ margin: 0, fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 13, color: "var(--text-3)", letterSpacing: "0.06em", textTransform: "uppercase" }}>

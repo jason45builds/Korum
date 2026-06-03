@@ -24,9 +24,9 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: "Only the captain can delete this match" }, { status: 403 });
     }
 
-    // Count participants
+    // Count active participants — use correct table name
     const { count } = await admin
-      .from("participants")
+      .from("match_participants")
       .select("id", { count: "exact", head: true })
       .eq("match_id", matchId)
       .in("status", ["CONFIRMED", "LOCKED", "PAYMENT_PENDING"]);
@@ -41,7 +41,7 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ deleted: false, cancelled: true });
     }
 
-    // Hard delete — no participants, safe to remove
+    // Hard delete — no active participants, safe to remove
     const { error } = await admin.from("matches").delete().eq("id", matchId);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json({ deleted: true, cancelled: false });

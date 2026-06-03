@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 
+// 5 tabs — Activity replaced with Tournaments (issue #31)
+// Reduced from 6 to 5 to fit 320px screens comfortably (issue #30)
 const TABS = [
   {
     href: "/dashboard",
@@ -37,22 +39,12 @@ const TABS = [
     ),
   },
   {
-    href: "/marketplace",
-    label: "Market",
+    href: "/tournaments",
+    label: "Tournaments",
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z" />
-        <line x1="3" y1="6" x2="21" y2="6" />
-        <path d="M16 10a4 4 0 01-8 0" />
-      </svg>
-    ),
-  },
-  {
-    href: "/activity",
-    label: "Activity",
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
-        <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+        <path d="M8 21h8M12 17v4M7 4H17l-1 8a5 5 0 01-8 0L7 4z" />
+        <path d="M4 4h3M17 4h3" />
       </svg>
     ),
   },
@@ -69,21 +61,15 @@ const TABS = [
 ] as const;
 
 export function BottomNav() {
-  // Use mounted to defer pathname check to client only
-  // This prevents hydration mismatch while keeping nav visible immediately
   const pathname = usePathname();
   const [mounted, setMounted] = useState(false);
 
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  useEffect(() => { setMounted(true); }, []);
 
   return (
     <nav className="bottom-nav" aria-label="Main navigation" suppressHydrationWarning>
       <div className="bottom-nav__inner">
         {TABS.map(({ href, label, icon }) => {
-          // Before mount: no active class (matches server render)
-          // After mount: correct active class based on pathname
           const active = mounted && (pathname === href || pathname.startsWith(href + "/"));
           return (
             <Link

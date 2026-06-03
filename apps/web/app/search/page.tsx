@@ -3,10 +3,10 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { useAuth } from "@/hooks/useAuth";
-import { AuthPanel } from "@/components/shared/AuthPanel";
 
-// ── Types ──────────────────────────────────────────────────────────────────
+// Issue #29 fixed: search is now accessible without sign-in
+// Issue #3  fixed: tournament links use /tournaments/${id} (plural)
+
 type MatchResult      = { id: string; title: string; venueName: string; startsAt: string; sport: string; squadSize: number; pricePerPlayer: number; status: string; joinCode: string };
 type PlayerResult     = { id: string; fullName: string; displayName: string; city: string; sport: string; reliabilityScore: number; role: string };
 type TeamResult       = { id: string; name: string; slug: string; sport: string; city: string; inviteCode: string; captainName: string; memberCount: number };
@@ -25,7 +25,6 @@ type Results = {
 
 type Tab = "all" | "matches" | "players" | "teams" | "grounds" | "vendors" | "tournaments";
 
-// ── Helpers ────────────────────────────────────────────────────────────────
 const fmtDate = (s: string) => {
   try { return new Date(s).toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" }); }
   catch { return s; }
@@ -43,7 +42,6 @@ const FORMAT_LABEL: Record<string, string> = {
   ROUND_ROBIN: "Round Robin", CUSTOM: "Custom",
 };
 
-// ── Reusable empty ─────────────────────────────────────────────────────────
 function Empty({ label }: { label: string }) {
   return (
     <div style={{ textAlign: "center", padding: "28px 20px" }}>
@@ -54,9 +52,16 @@ function Empty({ label }: { label: string }) {
   );
 }
 
-// ── Main ───────────────────────────────────────────────────────────────────
+function Section({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      <p className="section-label">{label}</p>
+      {children}
+    </div>
+  );
+}
+
 export default function SearchPage() {
-  const { isAuthenticated, loading: authLoading } = useAuth();
   const [q, setQ]           = useState("");
   const [results, setResults] = useState<Results | null>(null);
   const [loading, setLoading] = useState(false);
@@ -79,8 +84,6 @@ export default function SearchPage() {
     } finally { setLoading(false); }
   };
 
-  if (!isAuthenticated) return <main><div className="page"><AuthPanel title="Sign in to search" /></div></main>;
-
   const total = results
     ? (results.matches.length + results.players.length + results.teams.length +
        results.grounds.length + results.vendors.length + results.tournaments.length)
@@ -102,7 +105,7 @@ export default function SearchPage() {
     <main>
       <div className="page">
 
-        {/* ── Search input ── */}
+        {/* Search input */}
         <div style={{ position: "relative" }}>
           <svg style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }}
             width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text-4)" strokeWidth="2.5" strokeLinecap="round">
@@ -123,7 +126,7 @@ export default function SearchPage() {
           )}
         </div>
 
-        {/* ── Tabs (scrollable) ── */}
+        {/* Tabs */}
         {q.length >= 2 && (
           <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 2, scrollbarWidth: "none" }}>
             {TABS.map(t => (
@@ -142,14 +145,12 @@ export default function SearchPage() {
           </div>
         )}
 
-        {/* ── Spinner ── */}
         {loading && (
           <div style={{ textAlign: "center", padding: "32px 0" }}>
             <div style={{ width: 28, height: 28, border: "3px solid var(--line)", borderTopColor: "var(--blue)", borderRadius: "50%", animation: "spin 0.7s linear infinite", margin: "0 auto" }} />
           </div>
         )}
 
-        {/* ── Empty state ── */}
         {!loading && q.length < 2 && (
           <div style={{ textAlign: "center", padding: "48px 20px" }}>
             <div style={{ fontSize: 44, marginBottom: 16 }}>🔍</div>
@@ -176,7 +177,7 @@ export default function SearchPage() {
           </div>
         )}
 
-        {/* ══ MATCHES ══════════════════════════════════════════════════════════ */}
+        {/* MATCHES */}
         {!loading && show("matches") && (results?.matches.length ?? 0) > 0 && (
           <Section label="Open Matches">
             {results!.matches.map(m => (
@@ -196,7 +197,7 @@ export default function SearchPage() {
         )}
         {!loading && tab === "matches" && results?.matches.length === 0 && <Empty label="open matches" />}
 
-        {/* ══ TEAMS ════════════════════════════════════════════════════════════ */}
+        {/* TEAMS */}
         {!loading && show("teams") && (results?.teams.length ?? 0) > 0 && (
           <Section label="Teams">
             {results!.teams.map(t => (
@@ -218,7 +219,7 @@ export default function SearchPage() {
         )}
         {!loading && tab === "teams" && results?.teams.length === 0 && <Empty label="teams" />}
 
-        {/* ══ PLAYERS ══════════════════════════════════════════════════════════ */}
+        {/* PLAYERS */}
         {!loading && show("players") && (results?.players.length ?? 0) > 0 && (
           <Section label="Players">
             {results!.players.map(p => (
@@ -240,7 +241,7 @@ export default function SearchPage() {
         )}
         {!loading && tab === "players" && results?.players.length === 0 && <Empty label="players" />}
 
-        {/* ══ GROUNDS ══════════════════════════════════════════════════════════ */}
+        {/* GROUNDS */}
         {!loading && show("grounds") && (results?.grounds.length ?? 0) > 0 && (
           <Section label="Grounds & Venues">
             {results!.grounds.map(g => (
@@ -266,7 +267,7 @@ export default function SearchPage() {
         )}
         {!loading && tab === "grounds" && results?.grounds.length === 0 && <Empty label="grounds" />}
 
-        {/* ══ VENDORS ══════════════════════════════════════════════════════════ */}
+        {/* VENDORS */}
         {!loading && show("vendors") && (results?.vendors.length ?? 0) > 0 && (
           <Section label="Vendors & Suppliers">
             {results!.vendors.map(v => (
@@ -294,11 +295,11 @@ export default function SearchPage() {
         )}
         {!loading && tab === "vendors" && results?.vendors.length === 0 && <Empty label="vendors" />}
 
-        {/* ══ TOURNAMENTS ══════════════════════════════════════════════════════ */}
+        {/* TOURNAMENTS — fixed: /tournaments/${id} not /tournament/${id} (issue #3) */}
         {!loading && show("tournaments") && (results?.tournaments.length ?? 0) > 0 && (
           <Section label="Tournaments">
             {results!.tournaments.map(t => (
-              <Link key={t.id} href={`/tournament/${t.id}`}>
+              <Link key={t.id} href={`/tournaments/${t.id}`}>
                 <div className="card" style={{ padding: "14px 16px", display: "flex", gap: 12, alignItems: "center", cursor: "pointer" }}>
                   <div style={{ width: 44, height: 44, borderRadius: "var(--r-md)", background: "var(--red-soft)", border: "1.5px solid var(--red-border)", display: "grid", placeItems: "center", fontSize: 22, flexShrink: 0 }}>🏆</div>
                   <div style={{ flex: 1, minWidth: 0 }}>
@@ -324,15 +325,5 @@ export default function SearchPage() {
 
       </div>
     </main>
-  );
-}
-
-// ── Section wrapper ────────────────────────────────────────────────────────
-function Section({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-      <p className="section-label">{label}</p>
-      {children}
-    </div>
   );
 }

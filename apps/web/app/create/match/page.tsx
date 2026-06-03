@@ -25,22 +25,27 @@ function CreateMatchInner() {
   const prefillVenue  = searchParams.get("venueHint") ?? "";
   const prefillTeamId = searchParams.get("teamId") ?? "";
 
-  const defaultStart  = prefillDate && prefillTime
+  const defaultStart = prefillDate && prefillTime
     ? new Date(`${prefillDate}T${prefillTime}`).toISOString().slice(0, 16)
     : toLDT(new Date(Date.now() + 48 * 60 * 60 * 1000));
 
-  const [teams, setTeams]     = useState<TeamDetails[]>([]);
-  const [submitting, setSub]  = useState(false);
+  const [teams, setTeams]         = useState<TeamDetails[]>([]);
+  const [submitting, setSub]      = useState(false);
   const [createdId, setCreatedId] = useState<string | null>(null);
-  const [msg, setMsg]         = useState<string | null>(null);
-  const [form, setForm]       = useState({
+  const [createdJoinCode, setCreatedJoinCode] = useState<string | null>(null);
+  const [msg, setMsg]             = useState<string | null>(null);
+  const [form, setForm]           = useState({
     teamId: prefillTeamId, title: "", sport: "Football",
     venueName: prefillVenue, startsAt: defaultStart,
     squadSize: 11, pricePerPlayer: 250,
   });
 
-  const [groundQuery, setGroundQuery]     = useState(prefillVenue);
-  const [groundResults, setGroundResults] = useState<Array<{ id: string; name: string; address: string; city: string; sport: string[]; price_per_hour: number | null; surface: string | null; is_verified: boolean }>>([]);
+  const [groundQuery, setGroundQuery]         = useState(prefillVenue);
+  const [groundResults, setGroundResults]     = useState<Array<{
+    id: string; name: string; address: string; city: string;
+    sport: string[]; price_per_hour: number | null;
+    surface: string | null; is_verified: boolean;
+  }>>([]);
   const [groundSearching, setGroundSearching] = useState(false);
   const [groundDropOpen, setGroundDropOpen]   = useState(false);
   const groundTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -54,7 +59,8 @@ function CreateMatchInner() {
     groundTimer.current = setTimeout(async () => {
       setGroundSearching(true);
       try {
-        const res  = await fetch(`/api/grounds/search?q=${encodeURIComponent(val)}&city=${encodeURIComponent(form.teamId ? (teams.find(t => t.id === form.teamId)?.city ?? "") : "")}`);
+        const city = teams.find(t => t.id === form.teamId)?.city ?? "";
+        const res  = await fetch(`/api/grounds/search?q=${encodeURIComponent(val)}&city=${encodeURIComponent(city)}`);
         const data = await res.json() as { grounds: typeof groundResults };
         setGroundResults(data.grounds ?? []);
       } finally { setGroundSearching(false); }
@@ -67,11 +73,11 @@ function CreateMatchInner() {
     setGroundResults([]);
     setGroundDropOpen(false);
   };
+
   const [recurringForm, setRecurringForm] = useState({ frequency: "WEEKLY", dayOfWeek: 0, timeOfDay: "07:00", generateCount: 4 });
   const [isRecurring, setIsRecurring]     = useState(false);
   const DAYS = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
 
-  // Quick-create team inline
   const [showTeamForm, setShowTeamForm] = useState(false);
   const [teamDraft, setTeamDraft]       = useState({ name: "", sport: "Football", city: "" });
   const [creatingTeam, setCreatingTeam] = useState(false);
@@ -98,10 +104,8 @@ function CreateMatchInner() {
     setSub(true); setMsg(null);
     try {
       if (isRecurring) {
-        // Create a recurring template then generate N matches
         const tmplRes = await fetch("/api/recurring", {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          credentials: "same-origin",
+          method: "POST", headers: { "Content-Type": "application/json" }, credentials: "same-origin",
           body: JSON.stringify({
             teamId: form.teamId, title: form.title, sport: form.sport,
             venueName: form.venueName, squadSize: form.squadSize,
@@ -113,10 +117,8 @@ function CreateMatchInner() {
         });
         const tmpl = await tmplRes.json() as { template?: { id: string }; error?: string };
         if (!tmplRes.ok) throw new Error(tmpl.error);
-        // Generate first batch
         const genRes = await fetch("/api/recurring", {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          credentials: "same-origin",
+          method: "POST", headers: { "Content-Type": "application/json" }, credentials: "same-origin",
           body: JSON.stringify({ action: "generate", templateId: tmpl.template!.id, count: recurringForm.generateCount }),
         });
         const gen = await genRes.json() as { created?: number; matchIds?: string[] };
@@ -131,10 +133,12 @@ function CreateMatchInner() {
           venueAddress: form.venueName, notes: "", visibility: "PUBLIC",
           paymentDueAt: paymentDue.toISOString(),
           lockAt:       lockTime.toISOString(),
-          startsAt: matchStart.toISOString(),
-          publishNow: true,
+          startsAt:     matchStart.toISOString(),
+          publishNow:   true,
         });
-        setCreatedId(String(res.match.id));
+        const created = res.match as { id: string; join_code?: string };
+        setCreatedId(String(created.id));
+        setCreatedJoinCode((created.join_code as string | undefined) ?? null);
       }
     } catch (e) { setMsg(e instanceof Error ? e.message : "Failed"); }
     finally { setSub(false); }
@@ -154,23 +158,30 @@ function CreateMatchInner() {
     } finally { setCreatingTeam(false); }
   };
 
+  // Build the correct player-facing join URL (match detail page, not poll)
+  const getMatchJoinUrl = () => {
+    if (!createdId) return "";
+    const base = `${window.location.origin}/match/${createdId}`;
+    return createdJoinCode ? `${base}?joinCode=${createdJoinCode}` : base;
+  };
+
   const shareWhatsApp = () => {
     if (!createdId) return;
-    const link    = `${window.location.origin}/p/${createdId}`;
+    const link    = getMatchJoinUrl();
     const d       = new Date(form.startsAt);
     const dateStr = d.toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" });
     const timeStr = d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
-    const price   = form.pricePerPlayer > 0 ? `💰 ₹${form.pricePerPlayer}\n` : "";
-    const txt     = `🏏 *${form.title}*\n📅 ${dateStr} at ${timeStr}\n📍 ${form.venueName || "TBD"}\n${price}\nCan you play?\n👉 ${link}`;
+    const price   = form.pricePerPlayer > 0 ? `💰 ₹${form.pricePerPlayer} per player\n` : "";
+    const txt     = `🏏 *${form.title}*\n📅 ${dateStr} at ${timeStr}\n📍 ${form.venueName || "TBD"}\n${price}\nCan you play? Tap ✅ I'm In ↓\n👉 ${link}`;
     window.open(`https://wa.me/?text=${encodeURIComponent(txt)}`, "_blank");
   };
 
   const copyLink = () => {
     if (!createdId) return;
-    void navigator.clipboard.writeText(`${window.location.origin}/p/${createdId}`);
+    void navigator.clipboard.writeText(getMatchJoinUrl());
   };
 
-  // ── POST-CREATE: share screen ──────────────────────────────────────────────
+  // ── POST-CREATE: share screen ───────────────────────────────────────────
   if (createdId) {
     return (
       <main>
@@ -179,7 +190,7 @@ function CreateMatchInner() {
             <div style={{ fontSize: "3.5rem", marginBottom: "0.5rem" }}>🎉</div>
             <h1 className="title-lg">Match created!</h1>
             <p className="muted" style={{ marginTop: "0.35rem", fontSize: "0.9rem" }}>
-              Share with your players to start filling the squad.
+              Share this link so players can RSVP and pay.
             </p>
           </section>
 
@@ -187,7 +198,7 @@ function CreateMatchInner() {
           <button onClick={shareWhatsApp} style={{
             display: "flex", alignItems: "center", justifyContent: "center", gap: "0.75rem",
             width: "100%", padding: "1.1rem", background: "#25D366", color: "#fff",
-            border: "none", borderRadius: "var(--radius-lg)", cursor: "pointer",
+            border: "none", borderRadius: "var(--r-lg)", cursor: "pointer",
             fontFamily: "var(--font-display)", fontWeight: 800, fontSize: "1.05rem",
             boxShadow: "0 4px 20px #25D36650",
           }}>
@@ -202,13 +213,18 @@ function CreateMatchInner() {
             <Button variant="ghost" onClick={() => router.push(`/match/control?matchId=${createdId}`)} block>Captain Panel</Button>
           </div>
 
+          {/* Payment deadline notice */}
+          <div style={{ padding: "10px 14px", background: "var(--amber-soft)", border: "1px solid var(--amber-border)", borderRadius: "var(--r-md)", fontSize: 13, color: "#92400e" }}>
+            ⏰ Payment deadline is set to <strong>3 hours before kickoff</strong>. Adjust it in the Captain Panel if needed.
+          </div>
+
           <Button variant="ghost" onClick={() => router.push("/dashboard")} block>← Home</Button>
         </div>
       </main>
     );
   }
 
-  // ── FORM ──────────────────────────────────────────────────────────────────
+  // ── FORM ───────────────────────────────────────────────────────────────
   return (
     <main>
       <div className="page-shell">
@@ -241,7 +257,6 @@ function CreateMatchInner() {
               )}
             </label>
 
-            {/* Inline team create */}
             {showTeamForm && (
               <div style={{ padding: "0.875rem", background: "var(--surface-muted)", borderRadius: "var(--radius-sm)", display: "grid", gap: "0.6rem", border: "1px solid var(--line)" }}>
                 <p style={{ margin: 0, fontFamily: "var(--font-display)", fontWeight: 700, fontSize: "0.85rem" }}>Quick create team</p>
@@ -265,19 +280,16 @@ function CreateMatchInner() {
               </button>
             )}
 
-            {/* Title */}
             <label className="label">
               Match title
               <input className="input" placeholder="Sunday League — Week 4" value={form.title} onChange={F("title")} />
             </label>
 
-            {/* Date/time */}
             <label className="label">
               Date &amp; Time
               <input type="datetime-local" className="input" value={form.startsAt} onChange={F("startsAt")} />
             </label>
 
-            {/* Location — smart ground search */}
             <label className="label">
               Location
               <div style={{ position: "relative" }}>
@@ -293,13 +305,10 @@ function CreateMatchInner() {
                 {groundSearching && (
                   <div style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", width: 16, height: 16, border: "2px solid var(--line)", borderTopColor: "var(--blue)", borderRadius: "50%", animation: "spin 0.7s linear infinite" }} />
                 )}
-                {/* Dropdown */}
                 {groundDropOpen && (groundResults.length > 0 || groundQuery.length >= 2) && (
                   <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, background: "var(--surface)", border: "1.5px solid var(--line)", borderRadius: "var(--r-md)", boxShadow: "0 8px 24px rgba(0,0,0,0.12)", zIndex: 50, overflow: "hidden" }}>
                     {groundResults.map(g => (
-                      <button key={g.id}
-                        type="button"
-                        onMouseDown={() => selectGround(g)}
+                      <button key={g.id} type="button" onMouseDown={() => selectGround(g)}
                         style={{ width: "100%", padding: "10px 14px", border: "none", background: "transparent", cursor: "pointer", textAlign: "left", borderBottom: "1px solid var(--line)", display: "flex", flexDirection: "column", gap: 2 }}
                         onMouseEnter={e => (e.currentTarget.style.background = "var(--blue-soft)")}
                         onMouseLeave={e => (e.currentTarget.style.background = "transparent")}>
@@ -311,10 +320,7 @@ function CreateMatchInner() {
                         <span style={{ fontSize: 12, color: "var(--text-3)" }}>📍 {g.address}, {g.city}</span>
                       </button>
                     ))}
-                    {/* Register ground option always at bottom */}
-                    <button
-                      type="button"
-                      onMouseDown={() => { window.open("/marketplace/register?type=ground", "_blank"); }}
+                    <button type="button" onMouseDown={() => { window.open("/marketplace/register?type=ground", "_blank"); }}
                       style={{ width: "100%", padding: "10px 14px", border: "none", background: "transparent", cursor: "pointer", textAlign: "left", display: "flex", alignItems: "center", gap: 8, color: "var(--blue)", fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 13 }}>
                       <span>+</span> Register &ldquo;{groundQuery}&rdquo; as a ground
                     </button>
@@ -323,7 +329,6 @@ function CreateMatchInner() {
               </div>
             </label>
 
-            {/* Squad + cost */}
             <div className="grid grid-2" style={{ gap: "0.6rem" }}>
               <label className="label">
                 Squad size
@@ -337,7 +342,12 @@ function CreateMatchInner() {
               </label>
             </div>
 
-            {/* Recurring toggle */}
+            {/* Payment deadline preview */}
+            <div style={{ padding: "10px 14px", background: "var(--surface-2)", borderRadius: "var(--r-md)", border: "1px solid var(--line)", fontSize: 12, color: "var(--text-3)" }}>
+              ⏰ Payment deadline: <strong style={{ color: "var(--text-2)" }}>3 hrs before kickoff</strong> · Squad lock: <strong style={{ color: "var(--text-2)" }}>1 hr before kickoff</strong>
+              <span style={{ display: "block", marginTop: 2 }}>Adjust these anytime from the Captain Panel after creating.</span>
+            </div>
+
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 14px", background: isRecurring ? "var(--blue-soft)" : "var(--surface-2)", border: `1.5px solid ${isRecurring ? "var(--blue-border)" : "var(--line)"}`, borderRadius: "var(--r-md)", cursor: "pointer" }}
               onClick={() => setIsRecurring(v => !v)}>
               <div>

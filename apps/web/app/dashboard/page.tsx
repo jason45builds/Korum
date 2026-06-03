@@ -5,10 +5,11 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
-import { Loader } from "@/components/shared/Loader";
+import { DashboardSkeleton } from "@/components/shared/Skeletons";
 import { useAuth } from "@/hooks/useAuth";
 import { useMatch } from "@/hooks/useMatch";
 import { getMyTeams } from "@/services/api/team";
+import { track } from "@/lib/analytics";
 import type { MatchSummary } from "@korum/types/match";
 import type { TeamDetails } from "@korum/types/team";
 
@@ -26,40 +27,29 @@ const fmt = (s: string) => {
   catch { return s; }
 };
 
-// ─── GUEST HOME — shows value, soft login wall ─────────────────────────────
+// ─── GUEST HOME ────────────────────────────────────────────────────────────────
 function GuestHome() {
   const router = useRouter();
   return (
     <main>
       <div className="page">
-
-        {/* Hero */}
         <div style={{ paddingTop: 8, paddingBottom: 4 }}>
           <p className="t-label" style={{ color: "var(--blue)", marginBottom: 8 }}>Match Readiness Platform</p>
           <h1 className="t-h1" style={{ marginBottom: 10, lineHeight: 1.15 }}>
             Your squad.<br />Confirmed before kickoff.
           </h1>
           <p className="t-body" style={{ color: "var(--text-3)", marginBottom: 20 }}>
-            Captain shares a link. Players tap YES and pay. Everyone knows who&apos;s in.
+            Captain shares a link. Players tap I&apos;m In and pay. Squad locks automatically.
           </p>
-
-          {/* Primary CTAs — no login required yet */}
           <div style={{ display: "flex", gap: 10 }}>
             <Link href="/match/join" style={{ flex: 1 }}>
-              <button className="btn btn--primary btn--block" style={{ borderRadius: "var(--r-lg)", minHeight: 50 }}>
-                Join a Match
-              </button>
+              <button className="btn btn--primary btn--block" style={{ borderRadius: "var(--r-lg)", minHeight: 50 }}>Join a Match</button>
             </Link>
-            <button
-              onClick={() => router.push('/auth')}
-              className="btn btn--secondary"
-              style={{ flex: 1, borderRadius: "var(--r-lg)", minHeight: 50 }}>
-              Sign In
-            </button>
+            <button onClick={() => router.push("/auth")} className="btn btn--secondary"
+              style={{ flex: 1, borderRadius: "var(--r-lg)", minHeight: 50 }}>Sign In</button>
           </div>
         </div>
 
-        {/* How it works */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8 }}>
           {[
             { icon: "📣", step: "1", title: "Share", sub: "Captain sends WhatsApp link" },
@@ -75,12 +65,12 @@ function GuestHome() {
           ))}
         </div>
 
-        {/* Sample match card — shows what logged in looks like */}
+        {/* Demo match card */}
         <div>
           <div className="section-row" style={{ marginBottom: 8 }}>
-            <span className="section-label">What you&apos;ll see</span>
+            <span className="section-label">What captains see</span>
           </div>
-          <div className="match-card" style={{ opacity: 0.8, pointerEvents: "none" }}>
+          <div className="match-card" style={{ opacity: 0.9, pointerEvents: "none" }}>
             <div className="match-card__accent match-card__accent--amber" />
             <div className="match-card__body">
               <div className="match-card__header">
@@ -94,30 +84,20 @@ function GuestHome() {
                 <span className="badge badge-amber">Filling</span>
               </div>
               <div className="stats-strip">
-                <div className="stats-strip__item">
-                  <span className="stats-strip__num" style={{ color: "var(--green)" }}>7</span>
-                  <span className="stats-strip__label">Confirmed</span>
-                </div>
-                <div className="stats-strip__item">
-                  <span className="stats-strip__num" style={{ color: "var(--amber)" }}>2</span>
-                  <span className="stats-strip__label">Pending</span>
-                </div>
-                <div className="stats-strip__item">
-                  <span className="stats-strip__num" style={{ color: "var(--blue)" }}>2</span>
-                  <span className="stats-strip__label">Slots left</span>
-                </div>
+                <div className="stats-strip__item"><span className="stats-strip__num" style={{ color: "var(--green)" }}>7</span><span className="stats-strip__label">Confirmed</span></div>
+                <div className="stats-strip__item"><span className="stats-strip__num" style={{ color: "var(--amber)" }}>2</span><span className="stats-strip__label">Pending</span></div>
+                <div className="stats-strip__item"><span className="stats-strip__num" style={{ color: "var(--blue)" }}>2</span><span className="stats-strip__label">Slots left</span></div>
               </div>
               <div className="progress"><div className="progress__fill" style={{ width: "63%" }} /></div>
             </div>
           </div>
         </div>
 
-        {/* CTA strip */}
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
           {[
-            { icon: "🏏", title: "Create a match",   sub: "Set up fixtures in 30 seconds", href: "/create/match" },
-            { icon: "👥", title: "Fill your squad",  sub: "Players confirm with payment",  href: "/auth" },
-            { icon: "✅", title: "Everyone knows",   sub: "No more WhatsApp confusion",     href: "/auth" },
+            { icon: "🏏", title: "Create a match",  sub: "Set up fixtures in 30 seconds", href: "/create/match" },
+            { icon: "👥", title: "Fill your squad", sub: "Players confirm via payment",    href: "/auth" },
+            { icon: "✅", title: "Everyone knows",  sub: "No more WhatsApp confusion",     href: "/auth" },
           ].map(({ icon, title, sub, href }) => (
             <button key={title} onClick={() => router.push(href)}
               style={{ all: "unset", cursor: "pointer", display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", background: "var(--surface)", border: "1px solid var(--line)", borderRadius: "var(--r-md)", boxShadow: "var(--shadow-1)" }}>
@@ -130,17 +110,16 @@ function GuestHome() {
             </button>
           ))}
         </div>
-
       </div>
     </main>
   );
 }
 
-// ─── MAIN PAGE ─────────────────────────────────────────────────────────────────
+// ─── MAIN ──────────────────────────────────────────────────────────────────────
 export default function HomePage() {
   const { profile, isAuthenticated, loading: authLoading } = useAuth();
   const { dashboardMatches, pendingPayments, loading: matchLoading, loadDashboard } = useMatch();
-  const [teams, setTeams]       = useState<TeamDetails[]>([]);
+  const [teams, setTeams]         = useState<TeamDetails[]>([]);
   const [pendingAv, setPendingAv] = useState<PendingAv[]>([]);
 
   useEffect(() => {
@@ -148,24 +127,21 @@ export default function HomePage() {
     void loadDashboard();
     void getMyTeams().then(r => setTeams(r.teams)).catch(() => {});
     void fetch("/api/availability-check", { credentials: "same-origin" })
-      .then(r => r.json())
-      .then((d: { pending?: PendingAv[] }) => setPendingAv(d.pending ?? []))
-      .catch(() => {});
+      .then(r => r.json()).then((d: { pending?: PendingAv[] }) => setPendingAv(d.pending ?? [])).catch(() => {});
+    track("match_viewed", { path: "/dashboard" });
   }, [isAuthenticated]);
 
-  // Show guest page IMMEDIATELY — never block on auth loading
-  // When auth resolves and user IS authenticated, the content swaps in silently
-  // This eliminates the full-screen loader flash
-  if (!isAuthenticated) {
-    return <GuestHome />;
-  }
+  // Guest: show immediately without blocking on auth
+  if (!isAuthenticated && !authLoading) return <GuestHome />;
+  if (!isAuthenticated && authLoading) return <GuestHome />;
 
-  // ── SIGNED IN ──────────────────────────────────────────────────────────────
+  // Signed in but first load — show skeleton
+  if (matchLoading && dashboardMatches.length === 0) return <main><DashboardSkeleton /></main>;
+
   const upcoming       = dashboardMatches.filter(m => ["RSVP_OPEN","PAYMENT_PENDING","LOCKED","READY"].includes(m.status));
   const captainMatches = upcoming.filter(m => m.captainId === profile?.id);
   const playerMatches  = upcoming.filter(m => m.captainId !== profile?.id);
   const urgentCount    = pendingPayments.length + pendingAv.length;
-
   const hour  = new Date().getHours();
   const greet = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
 
@@ -173,28 +149,23 @@ export default function HomePage() {
     <main>
       <div className="page">
 
-        {/* ── Greeting ──────────────────────────────────────────────────── */}
         <div style={{ paddingTop: 4 }}>
           <p className="t-caption" style={{ marginBottom: 2 }}>{greet}</p>
           <h2 className="t-h2">{profile?.displayName ?? profile?.fullName ?? "Hey there"} 👋</h2>
         </div>
 
-        {/* ── SECTION 1 — ACTION REQUIRED ───────────────────────────────── */}
         {urgentCount > 0 && (
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             <div className="section-row">
               <span className="section-label" style={{ color: "var(--red)" }}>⚠ Action required</span>
             </div>
-
             {pendingPayments.slice(0, 2).map(p => (
               <Link key={p.id} href={`/match/${p.matchId}`}>
                 <div className="action-banner action-banner--amber animate-in">
                   <div style={{ display: "flex", alignItems: "center", gap: 12, flex: 1, minWidth: 0 }}>
                     <span style={{ fontSize: 22, flexShrink: 0 }}>💰</span>
                     <div>
-                      <p style={{ margin: 0, fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 14 }}>
-                        Pay ₹{p.amount} to confirm
-                      </p>
+                      <p style={{ margin: 0, fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 14 }}>Pay ₹{p.amount} to confirm</p>
                       <p className="t-caption" style={{ marginTop: 2 }}>Your spot is not locked yet</p>
                     </div>
                   </div>
@@ -202,7 +173,6 @@ export default function HomePage() {
                 </div>
               </Link>
             ))}
-
             {pendingAv.slice(0, 2).map(item => {
               const c = item.availability_checks;
               const d = new Date(c.match_date + "T00:00:00").toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" });
@@ -212,12 +182,8 @@ export default function HomePage() {
                     <div style={{ display: "flex", alignItems: "center", gap: 12, flex: 1 }}>
                       <span style={{ fontSize: 22, flexShrink: 0 }}>📋</span>
                       <div>
-                        <p style={{ margin: 0, fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 14 }}>
-                          Are you available?
-                        </p>
-                        <p className="t-caption" style={{ marginTop: 2 }}>
-                          {d}{c.match_time ? ` · ${c.match_time}` : ""}{c.venue_hint ? ` · ${c.venue_hint}` : ""}
-                        </p>
+                        <p style={{ margin: 0, fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 14 }}>Are you available?</p>
+                        <p className="t-caption" style={{ marginTop: 2 }}>{d}{c.match_time ? ` · ${c.match_time}` : ""}{c.venue_hint ? ` · ${c.venue_hint}` : ""}</p>
                       </div>
                     </div>
                     <button className="btn btn--secondary btn--sm" style={{ flexShrink: 0 }}>Respond</button>
@@ -228,7 +194,6 @@ export default function HomePage() {
           </div>
         )}
 
-        {/* ── SECTION 2 — YOUR MATCHES (captain) ────────────────────────── */}
         {captainMatches.length > 0 && (
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             <div className="section-row">
@@ -239,7 +204,6 @@ export default function HomePage() {
           </div>
         )}
 
-        {/* ── SECTION 2b — Upcoming (player) ────────────────────────────── */}
         {playerMatches.length > 0 && (
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             <div className="section-row">
@@ -250,13 +214,12 @@ export default function HomePage() {
           </div>
         )}
 
-        {/* ── Empty state ────────────────────────────────────────────────── */}
         {!matchLoading && upcoming.length === 0 && urgentCount === 0 && (
           <div className="card card-pad animate-in" style={{ textAlign: "center", padding: "40px 20px" }}>
             <div style={{ fontSize: 44, marginBottom: 12 }}>🏏</div>
-            <h3 className="t-title" style={{ marginBottom: 8 }}>No matches yet</h3>
+            <h3 className="t-title" style={{ marginBottom: 8 }}>No upcoming matches</h3>
             <p className="t-body" style={{ color: "var(--text-3)", marginBottom: 20 }}>
-              Create a match or join one from your captain&apos;s link.
+              Create a match for your squad or join from your captain&apos;s link.
             </p>
             <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
               <Link href="/create/match"><button className="btn btn--primary">Create Match</button></Link>
@@ -265,32 +228,23 @@ export default function HomePage() {
           </div>
         )}
 
-        {/* ── SECTION 3 — Team Activity ──────────────────────────────────── */}
         {teams.length > 0 && (
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             <div className="section-row">
               <span className="section-label">My teams</span>
               <Link href="/teams" className="section-action">Manage</Link>
             </div>
-            {/* Horizontal scroll strip */}
             <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 4, scrollbarWidth: "none" }}>
               {teams.map(t => (
                 <Link key={t.id} href={`/team/${t.id}`} style={{ flexShrink: 0 }}>
-                  <div style={{
-                    padding: "10px 14px", background: "var(--surface)", border: "1px solid var(--line)",
-                    borderRadius: "var(--r-full)", display: "flex", alignItems: "center", gap: 8,
-                    boxShadow: "var(--shadow-1)", whiteSpace: "nowrap",
-                  }}>
+                  <div style={{ padding: "10px 14px", background: "var(--surface)", border: "1px solid var(--line)", borderRadius: "var(--r-full)", display: "flex", alignItems: "center", gap: 8, boxShadow: "var(--shadow-1)", whiteSpace: "nowrap" }}>
                     <span style={{ fontSize: 14 }}>🏟️</span>
                     <span style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 13 }}>{t.name}</span>
                   </div>
                 </Link>
               ))}
               <Link href="/teams" style={{ flexShrink: 0 }}>
-                <div style={{
-                  padding: "10px 14px", background: "transparent", border: "1px dashed var(--line)",
-                  borderRadius: "var(--r-full)", display: "flex", alignItems: "center", gap: 6, whiteSpace: "nowrap",
-                }}>
+                <div style={{ padding: "10px 14px", background: "transparent", border: "1px dashed var(--line)", borderRadius: "var(--r-full)", display: "flex", alignItems: "center", whiteSpace: "nowrap" }}>
                   <span style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: 13, color: "var(--text-4)" }}>+ New team</span>
                 </div>
               </Link>
@@ -298,15 +252,14 @@ export default function HomePage() {
           </div>
         )}
 
-        {/* ── New user onboarding ────────────────────────────────────────── */}
         {teams.length === 0 && upcoming.length === 0 && (
           <div className="card card-pad animate-in">
             <p className="t-label" style={{ marginBottom: 12 }}>Get started</p>
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               {[
-                { href: "/teams",        icon: "🏟️", title: "Create a team",      sub: "Add your regular squad" },
-                { href: "/match/join",   icon: "🔗", title: "Join a match",       sub: "Open your captain's link" },
-                { href: "/create/match", icon: "🏏", title: "Create a match",     sub: "Share link to fill the squad" },
+                { href: "/teams",        icon: "🏟️", title: "Create a team",  sub: "Add your regular squad" },
+                { href: "/match/join",   icon: "🔗", title: "Join a match",   sub: "Open your captain's link" },
+                { href: "/create/match", icon: "🏏", title: "Create a match", sub: "Share link to fill the squad" },
               ].map(({ href, icon, title, sub }) => (
                 <Link key={href} href={href}>
                   <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 12px", background: "var(--surface-2)", borderRadius: "var(--r-md)", cursor: "pointer" }}>
@@ -328,8 +281,6 @@ export default function HomePage() {
   );
 }
 
-// ─── Match cards ───────────────────────────────────────────────────────────────
-
 function CaptainMatchCard({ match }: { match: MatchSummary }) {
   const confirmed = match.confirmedCount ?? 0;
   const total     = match.squadSize ?? 0;
@@ -337,7 +288,6 @@ function CaptainMatchCard({ match }: { match: MatchSummary }) {
   const left      = Math.max(0, total - confirmed);
   const pct       = total > 0 ? Math.min((confirmed / total) * 100, 100) : 0;
   const isLocked  = match.status === "LOCKED" || match.status === "READY";
-
   return (
     <Link href={`/match/control?matchId=${match.id}`} className="match-card animate-in">
       <div className={`match-card__accent ${isLocked ? "match-card__accent--locked" : pending > 0 ? "match-card__accent--amber" : "match-card__accent"}`} />
@@ -353,25 +303,12 @@ function CaptainMatchCard({ match }: { match: MatchSummary }) {
           <span className="badge badge-blue" style={{ flexShrink: 0 }}>Captain</span>
         </div>
         <div className="stats-strip">
-          <div className="stats-strip__item">
-            <span className="stats-strip__num" style={{ color: "var(--green)" }}>{confirmed}</span>
-            <span className="stats-strip__label">Confirmed</span>
-          </div>
-          <div className="stats-strip__item">
-            <span className="stats-strip__num" style={{ color: pending > 0 ? "var(--amber)" : "var(--text-4)" }}>{pending}</span>
-            <span className="stats-strip__label">Pending</span>
-          </div>
-          <div className="stats-strip__item">
-            <span className="stats-strip__num" style={{ color: left > 0 ? "var(--blue)" : "var(--green)" }}>{left}</span>
-            <span className="stats-strip__label">Slots left</span>
-          </div>
+          <div className="stats-strip__item"><span className="stats-strip__num" style={{ color: "var(--green)" }}>{confirmed}</span><span className="stats-strip__label">Confirmed</span></div>
+          <div className="stats-strip__item"><span className="stats-strip__num" style={{ color: pending > 0 ? "var(--amber)" : "var(--text-4)" }}>{pending}</span><span className="stats-strip__label">Pending</span></div>
+          <div className="stats-strip__item"><span className="stats-strip__num" style={{ color: left > 0 ? "var(--blue)" : "var(--green)" }}>{left}</span><span className="stats-strip__label">Slots left</span></div>
         </div>
-        <div className="progress">
-          <div className="progress__fill" style={{ width: `${pct}%` }} />
-        </div>
-        <p style={{ fontFamily: "var(--font-display)", fontSize: 12, fontWeight: 700, color: "var(--blue)", margin: 0 }}>
-          Open Control Panel →
-        </p>
+        <div className="progress"><div className="progress__fill" style={{ width: `${pct}%` }} /></div>
+        <p style={{ fontFamily: "var(--font-display)", fontSize: 12, fontWeight: 700, color: "var(--blue)", margin: 0 }}>Open Control Panel →</p>
       </div>
     </Link>
   );
@@ -393,9 +330,7 @@ function PlayerMatchCard({ match }: { match: MatchSummary }) {
               {match.venueName && <span>📍 {match.venueName}</span>}
             </div>
           </div>
-          <span className={`badge ${isLocked ? "badge-green" : "badge-amber"}`} style={{ flexShrink: 0 }}>
-            {isLocked ? "Locked ✅" : "Filling"}
-          </span>
+          <span className={`badge ${isLocked ? "badge-green" : "badge-amber"}`} style={{ flexShrink: 0 }}>{isLocked ? "Locked ✅" : "Filling"}</span>
         </div>
         <div className="mini-stats">
           <span className="mini-stat" style={{ color: "var(--green)" }}>👥 {confirmed}/{total}</span>

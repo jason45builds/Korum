@@ -1,34 +1,22 @@
 import Link from "next/link";
 
-import { Button } from "@/components/ui/Button";
-
 export default function NotFound() {
   return (
     <main>
-      <div className="page-shell">
-        <section className="hero-panel animate-in" style={{ display: "grid", gap: "1.25rem" }}>
-          <div>
-            <p className="eyebrow">404</p>
-            <h1 className="title-lg" style={{ marginTop: "0.4rem" }}>
-              Page not found.
-            </h1>
-            <p className="muted" style={{ marginTop: "0.4rem", fontSize: "0.9rem" }}>
-              That URL doesn&apos;t exist. It may have been moved, deleted, or you may have followed a broken link.
-            </p>
-          </div>
-
-          <div className="cluster">
-            <Link href="/">
-              <Button size="md">Go Home</Button>
-            </Link>
-            <Link href="/match/join">
-              <Button variant="secondary" size="md">Join a Match</Button>
-            </Link>
-            <Link href="/dashboard">
-              <Button variant="ghost" size="md">Dashboard</Button>
-            </Link>
-          </div>
-        </section>
+      <div className="page" style={{ alignItems: "center", textAlign: "center", paddingTop: 64 }}>
+        <div style={{ fontSize: 64, marginBottom: 16, animation: "up 300ms ease both" }}>🏟️</div>
+        <h1 className="t-h1" style={{ marginBottom: 8 }}>404 — Not found</h1>
+        <p className="t-body" style={{ color: "var(--text-3)", maxWidth: 280, margin: "0 auto 32px" }}>
+          This page doesn&apos;t exist or has been moved. Head back to the dashboard.
+        </p>
+        <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
+          <Link href="/dashboard">
+            <button className="btn btn--primary">Go to Dashboard</button>
+          </Link>
+          <Link href="/match/join">
+            <button className="btn btn--ghost">Join a Match</button>
+          </Link>
+        </div>
       </div>
     </main>
   );

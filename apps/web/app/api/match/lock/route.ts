@@ -27,8 +27,22 @@ export async function POST(request: Request) {
       throw new Error("Only the captain can lock the squad.");
     }
 
-    if (!['RSVP_OPEN', 'PAYMENT_PENDING'].includes(match.status as string)) {
+    if (!["RSVP_OPEN", "PAYMENT_PENDING"].includes(match.status as string)) {
       throw new Error("Match must be open before locking.");
+    }
+
+    // Guard: require at least 2 confirmed players before locking
+    const { count: confirmedCount, error: countError } = await admin
+      .from("match_participants")
+      .select("id", { count: "exact", head: true })
+      .eq("match_id", payload.matchId)
+      .in("status", ["CONFIRMED", "LOCKED"])
+      .eq("payment_status", "PAID");
+
+    if (countError) throw new Error(countError.message);
+
+    if ((confirmedCount ?? 0) < 2) {
+      throw new Error("Need at least 2 confirmed & paid players to lock the squad.");
     }
 
     const { data: lockedMatch, error: transitionError } = await admin.rpc("transition_match_state", {
@@ -41,6 +55,7 @@ export async function POST(request: Request) {
       throw new Error(transitionError.message);
     }
 
+    // Update confirmed participants to LOCKED status
     const { error: participantError } = await admin
       .from("match_participants")
       .update({ status: "LOCKED" })

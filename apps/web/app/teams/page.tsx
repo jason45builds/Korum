@@ -17,13 +17,14 @@ const memberText = (n: number) => n === 1 ? "1 member" : `${n} members`;
 
 export default function TeamsPage() {
   const { isAuthenticated, loading: authLoading } = useAuth();
-  const [teams, setTeams]   = useState<TeamDetails[]>([]);
+  const [teams, setTeams]     = useState<TeamDetails[]>([]);
   const [loading, setLoading] = useState(false);
-  const [sheet, setSheet]   = useState<Sheet>("none");
-  const [draft, setDraft]   = useState({ name: "", sport: "Football", city: "" });
-  const [code, setCode]     = useState("");
-  const [msg, setMsg]       = useState<{ text: string; error: boolean } | null>(null);
-  const [saving, setSaving] = useState(false);
+  const [sheet, setSheet]     = useState<Sheet>("none");
+  const [draft, setDraft]     = useState({ name: "", sport: "Football", city: "" });
+  // Issue #18: strip non-alphanumeric on input so spaces/specials never reach API
+  const [code, setCode]       = useState("");
+  const [msg, setMsg]         = useState<{ text: string; error: boolean } | null>(null);
+  const [saving, setSaving]   = useState(false);
 
   useEffect(() => { if (isAuthenticated) void load(); }, [isAuthenticated]);
 
@@ -66,18 +67,11 @@ export default function TeamsPage() {
     <main>
       <div className="page">
 
-        {/* Header */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <h1 className="t-h2">Teams</h1>
           <div style={{ display: "flex", gap: 8 }}>
-            <button className="btn btn--ghost btn--sm"
-              onClick={() => setSheet(s => s === "join" ? "none" : "join")}>
-              Join
-            </button>
-            <button className="btn btn--primary btn--sm"
-              onClick={() => setSheet(s => s === "create" ? "none" : "create")}>
-              + New
-            </button>
+            <button className="btn btn--ghost btn--sm" onClick={() => setSheet(s => s === "join" ? "none" : "join")}>Join</button>
+            <button className="btn btn--primary btn--sm" onClick={() => setSheet(s => s === "create" ? "none" : "create")}>+ New</button>
           </div>
         </div>
 
@@ -86,9 +80,7 @@ export default function TeamsPage() {
         {/* Create sheet */}
         {sheet === "create" && (
           <div className="card card-pad animate-pop">
-            <p style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 15, marginBottom: 14 }}>
-              Create team
-            </p>
+            <p style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 15, marginBottom: 14 }}>Create team</p>
             <div className="form-stack">
               <div className="field">
                 <label className="field-label">Team name</label>
@@ -98,8 +90,7 @@ export default function TeamsPage() {
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
                 <div className="field">
                   <label className="field-label">Sport</label>
-                  <select className="select" value={draft.sport}
-                    onChange={e => setDraft(d => ({ ...d, sport: e.target.value }))}>
+                  <select className="select" value={draft.sport} onChange={e => setDraft(d => ({ ...d, sport: e.target.value }))}>
                     {SPORT_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
                   </select>
                 </div>
@@ -119,27 +110,32 @@ export default function TeamsPage() {
           </div>
         )}
 
-        {/* Join sheet */}
+        {/* Join sheet — issue #18: strip non-alphanumeric so "ABC 123" becomes "ABC123" */}
         {sheet === "join" && (
           <div className="card card-pad animate-pop">
-            <p style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 15, marginBottom: 14 }}>
-              Join with invite code
-            </p>
+            <p style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 15, marginBottom: 14 }}>Join with invite code</p>
             <div className="form-stack">
-              <input className="input" placeholder="ABC123"
-                value={code} style={{ letterSpacing: "0.14em", textTransform: "uppercase", fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 18, textAlign: "center" }}
-                onChange={e => setCode(e.target.value.toUpperCase())} />
+              <input className="input"
+                placeholder="ABC123"
+                value={code}
+                inputMode="text"
+                autoCapitalize="characters"
+                style={{ letterSpacing: "0.14em", textTransform: "uppercase", fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 18, textAlign: "center" }}
+                onChange={e => setCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""))}
+              />
+              <p className="t-caption" style={{ textAlign: "center", marginTop: -6 }}>
+                Ask your captain for the 6-character team code
+              </p>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                <button className="btn btn--secondary btn--block" onClick={() => void handleJoin()} disabled={saving}>
+                <button className="btn btn--secondary btn--block" onClick={() => void handleJoin()} disabled={saving || code.length < 4}>
                   {saving ? "Joining…" : "Join Team"}
                 </button>
-                <button className="btn btn--ghost btn--block" onClick={() => setSheet("none")}>Cancel</button>
+                <button className="btn btn--ghost btn--block" onClick={() => { setSheet("none"); setCode(""); }}>Cancel</button>
               </div>
             </div>
           </div>
         )}
 
-        {/* Team list */}
         {teams.length === 0 ? (
           <div className="card card-pad" style={{ textAlign: "center", padding: "40px 20px" }}>
             <div style={{ fontSize: 40, marginBottom: 12 }}>🏟️</div>
@@ -152,14 +148,10 @@ export default function TeamsPage() {
               <Link key={team.id} href={`/team/${team.id}`}>
                 <div className="card" style={{ padding: "14px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, cursor: "pointer" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                    <div style={{ width: 44, height: 44, borderRadius: "var(--r-md)", background: "var(--blue-soft)", display: "grid", placeItems: "center", fontSize: 20, flexShrink: 0 }}>
-                      🏟️
-                    </div>
+                    <div style={{ width: 44, height: 44, borderRadius: "var(--r-md)", background: "var(--blue-soft)", display: "grid", placeItems: "center", fontSize: 20, flexShrink: 0 }}>🏟️</div>
                     <div>
                       <p style={{ margin: 0, fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 15 }}>{team.name}</p>
-                      <p className="t-caption" style={{ marginTop: 2 }}>
-                        {team.sport} · {team.city} · {memberText(team.members.length)}
-                      </p>
+                      <p className="t-caption" style={{ marginTop: 2 }}>{team.sport} · {team.city} · {memberText(team.members.length)}</p>
                     </div>
                   </div>
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text-4)" strokeWidth="2.5" strokeLinecap="round"><path d="M9 18l6-6-6-6" /></svg>
