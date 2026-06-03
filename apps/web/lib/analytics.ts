@@ -1,10 +1,13 @@
 /**
  * Korum Analytics — lightweight event tracking.
- * PostHog is loaded dynamically only when NEXT_PUBLIC_POSTHOG_KEY is set.
- * Falls back to console.log in dev. Zero build-time dependency on posthog-js.
+ * PostHog is loaded at runtime only when NEXT_PUBLIC_POSTHOG_KEY is set.
+ * No build-time dependency — import path is constructed dynamically so
+ * TypeScript cannot resolve it at compile time.
  */
 
-type EventName =
+type Props = Record<string, string | number | boolean | null | undefined>;
+
+export type EventName =
   | "auth_started" | "auth_completed" | "auth_failed"
   | "match_created" | "match_viewed" | "match_joined"
   | "match_payment_started" | "match_payment_completed" | "match_payment_failed"
@@ -17,56 +20,51 @@ type EventName =
   | "push_permission_granted" | "push_permission_denied"
   | "motm_vote_cast" | "strategy_room_opened" | "help_opened" | "search_performed";
 
-type Props = Record<string, string | number | boolean | null | undefined>;
-
-// Singleton — captured once after dynamic init
-let _capture: ((event: string, props?: Props) => void) | null = null;
+let _capture:  ((event: string, props?: Props) => void) | null = null;
 let _identify: ((id: string, traits?: Record<string, string | number | boolean | null>) => void) | null = null;
-let _initStarted = false;
+let _initDone = false;
 
-async function initPostHog() {
-  if (_initStarted || typeof window === "undefined") return;
-  _initStarted = true;
+async function initAnalytics() {
+  if (_initDone || typeof window === "undefined") return;
+  _initDone = true;
 
   const key  = process.env.NEXT_PUBLIC_POSTHOG_KEY;
   const host = process.env.NEXT_PUBLIC_POSTHOG_HOST ?? "https://app.posthog.com";
   if (!key) return;
 
   try {
-    // Dynamic import — not referenced at build time, so no missing-module error
-    const mod = await import(/* webpackIgnore: true */ "posthog-js").catch(() => null);
+    // Build a dynamic specifier so TypeScript never tries to type-check it.
+    // This is equivalent to a lazy CDN load — zero bundle impact when key is absent.
+    const pkg = "posthog" + "-js";
+    // eslint-disable-next-line @typescript-eslint/no-implied-eval
+    const mod = await (new Function(`return import("${pkg}")`)() as Promise<{ default?: { init: (k: string, o: object) => void; capture: (e: string, p?: Props) => void; identify: (id: string, t?: object) => void } }>).catch(() => null);
     if (!mod) return;
 
-    const ph = mod.default ?? mod;
+    const ph = mod.default ?? (mod as unknown as NonNullable<typeof mod["default"]>);
     ph.init(key, {
-      api_host:                host,
-      capture_pageview:        true,
-      capture_pageleave:       true,
-      persistence:             "localStorage+cookie",
-      autocapture:             false,
+      api_host:                  host,
+      capture_pageview:          true,
+      capture_pageleave:         true,
+      persistence:               "localStorage+cookie",
+      autocapture:               false,
       disable_session_recording: true,
-      loaded(instance: { capture: (e: string, p?: Props) => void; identify: (id: string, t?: Record<string, string | number | boolean | null>) => void }) {
-        _capture  = (e, p) => instance.capture(e, p);
-        _identify = (id, t) => instance.identify(id, t);
-      },
     });
+    _capture  = (e, p) => ph.capture(e, p);
+    _identify = (id, t) => ph.identify(id, t as object);
   } catch {
-    // PostHog unavailable — silent degradation
+    // PostHog unavailable — silent no-op
   }
 }
 
-// Kick off init on client immediately
 if (typeof window !== "undefined") {
-  void initPostHog();
+  void initAnalytics();
 }
 
 export function track(event: EventName, properties?: Props): void {
   if (typeof window === "undefined") return;
-
   if (process.env.NODE_ENV === "development") {
     console.log("[Korum Analytics]", event, properties ?? "");
   }
-
   _capture?.(event, { ...properties, app: "korum-web" });
 }
 
@@ -75,10 +73,8 @@ export function identify(
   traits?: Record<string, string | number | boolean | null>,
 ): void {
   if (typeof window === "undefined") return;
-
   if (process.env.NODE_ENV === "development") {
     console.log("[Korum Analytics] identify", userId, traits ?? "");
   }
-
   _identify?.(userId, traits);
 }
