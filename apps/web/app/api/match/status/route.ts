@@ -6,9 +6,12 @@ import {
   requireAuthenticatedUser,
 } from "@/services/supabase/server";
 
-// Dashboard only returns matches from the last 60 days or in the future
-// This prevents unbounded payload growth for long-time users.
 const DASHBOARD_CUTOFF_DAYS = 60;
+
+type MatchQueryResult = {
+  data: Record<string, unknown>[] | null;
+  error: { message: string } | null;
+};
 
 const buildMatchSummaries = async (
   admin: ReturnType<typeof createAdminClient>,
@@ -68,20 +71,21 @@ export async function GET(request: NextRequest) {
   try {
     const admin = createAdminClient();
     const { user } = await requireAuthenticatedUser(request);
-    const matchId = request.nextUrl.searchParams.get("matchId");
+    const matchId  = request.nextUrl.searchParams.get("matchId");
     const joinCode = request.nextUrl.searchParams.get("joinCode");
-    const teamId = request.nextUrl.searchParams.get("teamId");
-    const scope = request.nextUrl.searchParams.get("scope");
+    const teamId   = request.nextUrl.searchParams.get("teamId");
+    const scope    = request.nextUrl.searchParams.get("scope");
 
     // ── DASHBOARD ─────────────────────────────────────────────────────────
     if (scope === "dashboard") {
-      // Only fetch recent/future matches — cutoff 60 days ago
-      const cutoff = new Date(Date.now() - DASHBOARD_CUTOFF_DAYS * 24 * 60 * 60 * 1000).toISOString();
+      const cutoff = new Date(
+        Date.now() - DASHBOARD_CUTOFF_DAYS * 24 * 60 * 60 * 1000,
+      ).toISOString();
 
       const [
-        { data: memberRows,     error: memberError },
+        { data: memberRows,      error: memberError },
         { data: participantRows, error: participantError },
-        { data: captainMatches, error: captainError },
+        { data: captainMatches,  error: captainError },
       ] = await Promise.all([
         admin.from("memberships").select("team_id").eq("user_id", user.id).eq("is_active", true),
         admin.from("match_participants").select("match_id").eq("user_id", user.id),
@@ -96,53 +100,64 @@ export async function GET(request: NextRequest) {
 
       if (memberError || participantError || captainError) {
         throw new Error(
-          memberError?.message ||
-          participantError?.message ||
-          captainError?.message ||
+          memberError?.message ??
+          participantError?.message ??
+          captainError?.message ??
           "Could not load dashboard.",
         );
       }
 
-      const teamIds  = Array.from(new Set((memberRows ?? []).map((r) => r.team_id)));
+      const teamIds  = Array.from(new Set((memberRows  ?? []).map((r) => r.team_id)));
       const matchIds = Array.from(new Set((participantRows ?? []).map((r) => r.match_id)));
 
-      const [captainSet, teamSet, participantSet] = await Promise.all([
-        Promise.resolve({ data: captainMatches ?? [], error: null }),
-        teamIds.length
-          ? admin
-              .from("matches")
-              .select("*")
-              .in("team_id", teamIds)
-              .gte("starts_at", cutoff)
-              .order("starts_at", { ascending: false })
-              .limit(50)
-          : Promise.resolve({ data: [] as Record<string, unknown>[], error: null }),
-        matchIds.length
-          ? admin
-              .from("matches")
-              .select("*")
-              .in("id", matchIds)
-              .gte("starts_at", cutoff)
-              .order("starts_at", { ascending: false })
-              .limit(50)
-          : Promise.resolve({ data: [] as Record<string, unknown>[], error: null }),
-      ]);
+      // Use a shared empty-result helper so TypeScript knows error can be non-null
+      const empty = (): Promise<MatchQueryResult> =>
+        Promise.resolve({ data: [] as Record<string, unknown>[], error: null });
 
-      if (captainSet.error || teamSet.error || participantSet.error) {
+      const [captainSet, teamSet, participantSet]: MatchQueryResult[] =
+        await Promise.all([
+          // captainMatches already fetched — wrap so the type matches the others
+          Promise.resolve({
+            data: (captainMatches ?? []) as Record<string, unknown>[],
+            error: null as { message: string } | null,
+          }),
+          teamIds.length
+            ? admin
+                .from("matches")
+                .select("*")
+                .in("team_id", teamIds)
+                .gte("starts_at", cutoff)
+                .order("starts_at", { ascending: false })
+                .limit(50)
+                .then((r) => r as MatchQueryResult)
+            : empty(),
+          matchIds.length
+            ? admin
+                .from("matches")
+                .select("*")
+                .in("id", matchIds)
+                .gte("starts_at", cutoff)
+                .order("starts_at", { ascending: false })
+                .limit(50)
+                .then((r) => r as MatchQueryResult)
+            : empty(),
+        ]);
+
+      if (captainSet.error ?? teamSet.error ?? participantSet.error) {
         throw new Error(
-          captainSet.error?.message ||
-          teamSet.error?.message ||
-          participantSet.error?.message ||
+          captainSet.error?.message ??
+          teamSet.error?.message ??
+          participantSet.error?.message ??
           "Could not load matches.",
         );
       }
 
       const mergedMap = new Map<string, Record<string, unknown>>();
       [
-        ...(captainSet.data ?? []),
-        ...(teamSet.data ?? []),
+        ...(captainSet.data  ?? []),
+        ...(teamSet.data     ?? []),
         ...(participantSet.data ?? []),
-      ].forEach((m) => mergedMap.set(m.id as string, m as Record<string, unknown>));
+      ].forEach((m) => mergedMap.set(m.id as string, m));
 
       const matches = await buildMatchSummaries(admin, Array.from(mergedMap.values()));
 
@@ -154,13 +169,13 @@ export async function GET(request: NextRequest) {
 
       if (paymentError) throw new Error(paymentError.message);
 
-      const pendingPaymentRows = (pendingPayments ?? []).map((payment) => ({
-        id: payment.id,
-        matchId: payment.match_id,
-        amount: Number(payment.amount),
-        currency: payment.currency,
-        status: payment.status,
-        createdAt: payment.created_at,
+      const pendingPaymentRows = (pendingPayments ?? []).map((p) => ({
+        id:        p.id,
+        matchId:   p.match_id,
+        amount:    Number(p.amount),
+        currency:  p.currency,
+        status:    p.status,
+        createdAt: p.created_at,
       }));
 
       return NextResponse.json({ matches, pendingPayments: pendingPaymentRows });
@@ -195,7 +210,7 @@ export async function GET(request: NextRequest) {
     if (matchError || !match) throw new Error("Match not found.");
 
     const [
-      { data: isActor, error: actorError },
+      { data: isActor,       error: actorError },
       { data: ownParticipant, error: ownParticipantError },
     ] = await Promise.all([
       admin.rpc("is_match_actor", { p_match_id: match.id, p_user_id: user.id }),
@@ -209,7 +224,7 @@ export async function GET(request: NextRequest) {
 
     if (actorError || ownParticipantError) {
       throw new Error(
-        actorError?.message || ownParticipantError?.message || "Could not verify access.",
+        actorError?.message ?? ownParticipantError?.message ?? "Could not verify access.",
       );
     }
 
@@ -221,7 +236,7 @@ export async function GET(request: NextRequest) {
       { data: team },
       { data: captain },
       { data: participantRows, error: participantRowsError },
-      { data: inviteRows, error: inviteError },
+      { data: inviteRows,      error: inviteError },
     ] = await Promise.all([
       admin.from("teams").select("name").eq("id", match.team_id).maybeSingle(),
       admin.from("users").select("full_name").eq("id", match.captain_id).maybeSingle(),
@@ -237,11 +252,9 @@ export async function GET(request: NextRequest) {
         .order("created_at", { ascending: false }),
     ]);
 
-    if (participantRowsError || inviteError) {
+    if (participantRowsError ?? inviteError) {
       throw new Error(
-        participantRowsError?.message ||
-        inviteError?.message ||
-        "Could not load match details.",
+        participantRowsError?.message ?? inviteError?.message ?? "Could not load match details.",
       );
     }
 
@@ -258,50 +271,50 @@ export async function GET(request: NextRequest) {
     if (participantUserError) throw new Error(participantUserError.message);
 
     const userMap = new Map(
-      (participantUsers ?? []).map((profile) => [profile.id, profile]),
+      (participantUsers ?? []).map((p) => [p.id, p]),
     );
 
     const matchDetail = {
-      id: match.id,
-      teamId: match.team_id,
-      captainId: match.captain_id,
-      title: match.title,
-      sport: match.sport,
-      venueName: match.venue_name,
+      id:           match.id,
+      teamId:       match.team_id,
+      captainId:    match.captain_id,
+      title:        match.title,
+      sport:        match.sport,
+      venueName:    match.venue_name,
       venueAddress: match.venue_address,
-      startsAt: match.starts_at,
+      startsAt:     match.starts_at,
       paymentDueAt: match.payment_due_at,
-      lockAt: match.lock_at,
-      squadSize: match.squad_size,
+      lockAt:       match.lock_at,
+      squadSize:    match.squad_size,
       pricePerPlayer: Number(match.price_per_player),
-      status: match.status,
-      visibility: match.visibility,
-      joinCode: match.join_code,
-      notes: match.notes,
-      createdAt: match.created_at,
-      updatedAt: match.updated_at,
-      teamName: team?.name ?? "Unnamed team",
-      captainName: captain?.full_name ?? "Captain",
+      status:       match.status,
+      visibility:   match.visibility,
+      joinCode:     match.join_code,
+      notes:        match.notes,
+      createdAt:    match.created_at,
+      updatedAt:    match.updated_at,
+      teamName:     team?.name    ?? "Unnamed team",
+      captainName:  captain?.full_name ?? "Captain",
       participants: (participantRows ?? []).map((participant) => {
         const profile = userMap.get(participant.user_id);
         return {
-          participantId: participant.id,
-          userId: participant.user_id,
-          fullName: profile?.full_name ?? "Unknown player",
-          phone: profile?.phone ?? "Hidden",
-          status: participant.status,
-          paymentStatus: participant.payment_status,
+          participantId:   participant.id,
+          userId:          participant.user_id,
+          fullName:        profile?.full_name      ?? "Unknown player",
+          phone:           profile?.phone          ?? "Hidden",
+          status:          participant.status,
+          paymentStatus:   participant.payment_status,
           reliabilityScore: Number(profile?.reliability_score ?? 0),
-          joinedAt: participant.joined_at,
-          holdExpiresAt: participant.hold_expires_at,
+          joinedAt:        participant.joined_at,
+          holdExpiresAt:   participant.hold_expires_at,
         };
       }),
       invites: (inviteRows ?? []).map((invite) => ({
-        id: invite.id,
+        id:           invite.id,
         invitedPhone: invite.invited_phone,
-        invitedName: invite.invited_name,
-        status: invite.status,
-        expiresAt: invite.expires_at,
+        invitedName:  invite.invited_name,
+        status:       invite.status,
+        expiresAt:    invite.expires_at,
       })),
     };
 
