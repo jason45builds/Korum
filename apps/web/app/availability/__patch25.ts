@@ -1,1 +1,2 @@
-// This file is intentionally empty. Delete it.
+// This file was a temporary development note. It is safe to delete.
+export {};

@@ -83,7 +83,7 @@ export default function GroundDetailPage() {
         </button>
 
         {/* Header card */}
-        <div className="card animate-in" style={{ overflow: "hidden" }}>
+        <div className="card animate-in" style={{ overflow: "hidden", animationDelay: "0ms" }}>
           <div style={{ height: 4, background: ground.is_verified ? "var(--green)" : "var(--line)" }} />
           <div style={{ padding: "16px 16px 14px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, marginBottom: 10 }}>
@@ -131,7 +131,7 @@ export default function GroundDetailPage() {
         </div>
 
         {/* ── MAP ── */}
-        <div className="card animate-in" style={{ overflow: "hidden" }}>
+        <div className="card animate-in" style={{ overflow: "hidden", animationDelay: "60ms" }}>
           <div style={{ padding: "12px 16px 10px", display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid var(--line)" }}>
             <p style={{ margin: 0, fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 13, color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
               Location
@@ -176,7 +176,7 @@ export default function GroundDetailPage() {
         </div>
 
         {/* ── Contact + action buttons ── */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        <div className="animate-in" style={{ display: "flex", flexDirection: "column", gap: 10, animationDelay: "120ms" }}>
           {ground.contact_phone && (
             <button
               onClick={callGround}

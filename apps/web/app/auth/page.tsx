@@ -215,7 +215,9 @@ function AuthContent() {
               <button className="a-btn-secondary" onClick={() => { clearErr(); setScreen("email-form"); }}>📧 Continue with Email</button>
             </div>
             <p style={{ textAlign: "center", fontSize: 12, color: "var(--text-4)", marginTop: 24, lineHeight: 1.6 }}>
-              By continuing you agree to Korum&apos;s Terms of Service and Privacy Policy.
+              By continuing you agree to Korum&apos;s{" "}
+              <a href="/terms" style={{ color: "var(--blue)", fontWeight: 600 }}>Terms of Service</a>{" "}and{" "}
+              <a href="/privacy" style={{ color: "var(--blue)", fontWeight: 600 }}>Privacy Policy</a>.
             </p>
           </div>
         )}

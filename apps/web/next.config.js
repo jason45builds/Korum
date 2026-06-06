@@ -43,10 +43,21 @@ const nextConfig = {
         source: "/(.*)",
         headers: [
           { key: "X-Content-Type-Options",  value: "nosniff" },
-          { key: "X-Frame-Options",          value: "DENY" },
+          // SAMEORIGIN (not DENY) — DENY blocks all iframes including our own OSM embeds
+          { key: "X-Frame-Options",          value: "SAMEORIGIN" },
           { key: "X-XSS-Protection",         value: "1; mode=block" },
           { key: "Referrer-Policy",           value: "strict-origin-when-cross-origin" },
           { key: "Permissions-Policy",        value: "camera=(), microphone=(), geolocation=(self)" },
+        ],
+      },
+      // Ground detail pages embed an OpenStreetMap iframe — allow it via CSP
+      {
+        source: "/marketplace/ground/:id",
+        headers: [
+          {
+            key: "Content-Security-Policy",
+            value: "frame-src 'self' https://www.openstreetmap.org;",
+          },
         ],
       },
       // Static assets — long cache
